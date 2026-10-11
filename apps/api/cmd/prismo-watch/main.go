@@ -33,10 +33,9 @@ type state struct {
 }
 
 func main() {
-	home, _ := os.UserHomeDir()
 	cache, _ := os.UserCacheDir()
 	var (
-		dir        = flag.String("dir", filepath.Join(home, "Pictures", "Screenshots"), "folder to watch")
+		dir        = flag.String("dir", screenshotsDir(), "folder to watch")
 		baseURL    = flag.String("url", os.Getenv("PRISMO_URL"), "Prismo Cloud address")
 		token      = flag.String("token", os.Getenv("PRISMO_TOKEN"), "API token (upload scope is enough)")
 		collection = flag.String("collection", "screenshots", "collection new files go into")
@@ -44,8 +43,14 @@ func main() {
 		interval   = flag.Duration("interval", 2*time.Second, "how often to look for new files")
 		backfill   = flag.Bool("backfill", false, "also upload files that are already in the folder")
 		statePath  = flag.String("state", filepath.Join(cache, "prismo-watch", "state.json"), "where progress is remembered")
+		logPath    = flag.String("log", "", "also write the log to this file (for running without a window)")
 	)
 	flag.Parse()
+	if *logPath != "" {
+		if f, err := os.OpenFile(*logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
+			log.SetOutput(io.MultiWriter(os.Stderr, f))
+		}
+	}
 	if *baseURL == "" || *token == "" {
 		log.Fatal("both -url and -token are required (or PRISMO_URL and PRISMO_TOKEN)")
 	}
@@ -101,6 +106,12 @@ func main() {
 		}
 		time.Sleep(*interval)
 	}
+}
+
+// guessDir is where screenshots land on a Windows that was left alone.
+func guessDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, "Pictures", "Screenshots")
 }
 
 func upload(endpoint, token, path, collection, visibility string) (string, error) {

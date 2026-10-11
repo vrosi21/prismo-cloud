@@ -171,7 +171,8 @@ function FreshToken({ publicUrl, secret, name, onDone }: { publicUrl: string; se
     const ok = await copyText(text)
     log(ok ? 'ok' : 'err', ok ? `${label} copied` : 'clipboard refused')
   }
-  const watchCommand = `prismo-watch.exe -url ${publicUrl} -token ${secret}`
+  // Installs the folder watcher so it starts with Windows (scripts/install-watcher.ps1).
+  const watchCommand = `powershell -ExecutionPolicy Bypass -File scripts\\install-watcher.ps1 -Url ${publicUrl} -Token ${secret}`
 
   return (
     <div className="px-accent flex flex-col gap-4 bg-panel-2 p-4">
@@ -206,8 +207,13 @@ function FreshToken({ publicUrl, secret, name, onDone }: { publicUrl: string; se
         >
           download sharex config
         </button>
-        <button type="button" className="btn" onClick={() => copy('watcher command', watchCommand)}>
-          copy folder watcher command
+        <button
+          type="button"
+          className="btn"
+          title="run it in a terminal opened in the prismo-cloud folder"
+          onClick={() => copy('watcher install command', watchCommand)}
+        >
+          copy watcher install command
         </button>
         <button type="button" className="btn" onClick={onDone}>
           done
