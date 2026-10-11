@@ -16,6 +16,8 @@ import (
 // assetView is an asset as clients see it: the row plus ready-made URLs.
 type assetView struct {
 	store.Asset
+	// What the caller may do with it: "owner", "edit" or "view".
+	Access   string            `json:"access"`
 	Variants []string          `json:"variants"`
 	URLs     map[string]string `json:"urls"`
 }
@@ -48,7 +50,7 @@ func cleanExt(filename string) string {
 }
 
 func (s *Server) view(a store.Asset) assetView {
-	v := assetView{Asset: a, Variants: []string{}, URLs: map[string]string{}}
+	v := assetView{Asset: a, Access: accessName[accessOwner], Variants: []string{}, URLs: map[string]string{}}
 	file := "/v1/assets/" + a.ID + "/file"
 	// The hash prefix makes each URL name one exact file, so browsers can
 	// cache it forever and still see a new file right after a change.
@@ -104,22 +106,30 @@ func (s *Server) listAssets(w http.ResponseWriter, r *http.Request) {
 	f := store.AssetFilter{
 		OwnerID:      who(r).UserID,
 		Trashed:      q.Get("trashed") == "1",
-		Kind:         q.Get("kind"),
 		CollectionID: q.Get("collection"),
-		Tag:          strings.ToLower(strings.TrimSpace(q.Get("tag"))),
-		Query:        strings.TrimSpace(q.Get("q")),
-		Cursor:       q.Get("cursor"),
-		Limit:        60,
 	}
+	if f.CollectionID != "" && f.CollectionID != "none" && !isUUID(f.CollectionID) {
+		writeErr(w, http.StatusBadRequest, "collection must be an id or \"none\"")
+		return
+	}
+	s.writeAssetPage(w, r, f, accessOwner, nil)
+}
+
+// writeAssetPage finishes a filter from the query string (kind, tag, search,
+// cursor, limit), runs it and writes one page. Whose assets and which jar are
+// decided by the caller, never by the query string.
+func (s *Server) writeAssetPage(w http.ResponseWriter, r *http.Request, f store.AssetFilter, level int, extra map[string]any) {
+	q := r.URL.Query()
+	f.Kind = q.Get("kind")
+	f.Tag = strings.ToLower(strings.TrimSpace(q.Get("tag")))
+	f.Query = strings.TrimSpace(q.Get("q"))
+	f.Cursor = q.Get("cursor")
+	f.Limit = 60
 	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 && n <= 200 {
 		f.Limit = n
 	}
 	if f.Kind != "" && !validKind(f.Kind) {
 		writeErr(w, http.StatusBadRequest, "unknown kind")
-		return
-	}
-	if f.CollectionID != "" && f.CollectionID != "none" && !isUUID(f.CollectionID) {
-		writeErr(w, http.StatusBadRequest, "collection must be an id or \"none\"")
 		return
 	}
 	if f.Cursor != "" && !isUUID(f.Cursor) {
@@ -142,9 +152,13 @@ func (s *Server) listAssets(w http.ResponseWriter, r *http.Request) {
 	}
 	views := make([]assetView, len(assets))
 	for i, a := range assets {
-		views[i] = s.view(a)
+		views[i] = s.viewAs(a, level)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"assets": views, "next_cursor": next})
+	out := map[string]any{"assets": views, "next_cursor": next}
+	for k, v := range extra {
+		out[k] = v
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) getAsset(w http.ResponseWriter, r *http.Request) {
@@ -152,11 +166,11 @@ func (s *Server) getAsset(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a, err := s.store.GetAsset(r.Context(), who(r).UserID, id)
+	a, level, err := s.assetAccess(r.Context(), who(r), id)
 	if s.assetErr(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, s.view(a))
+	writeJSON(w, http.StatusOK, s.viewAs(a, level))
 }
 
 // assetErr writes the response for a failed asset lookup and reports whether
@@ -190,7 +204,21 @@ func (s *Server) updateAsset(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	owner := who(r).UserID
+	current, level, err := s.assetAccess(r.Context(), who(r), id)
+	if s.assetErr(w, r, err) {
+		return
+	}
+	if level < accessEdit {
+		writeErr(w, http.StatusForbidden, "you can only view this")
+		return
+	}
+	// Someone with edit rights may rename and tag. Who can see the item,
+	// what it is and which jar it sits in stay the owner's decisions.
+	if level < accessOwner && (req.Visibility != nil || req.Kind != nil || req.CollectionID.Set) {
+		writeErr(w, http.StatusForbidden, "only the owner can change that")
+		return
+	}
+	owner := current.OwnerID
 	p := store.AssetPatch{Title: req.Title, Visibility: req.Visibility, Kind: req.Kind}
 	if p.Title != nil && len(*p.Title) > 200 {
 		writeErr(w, http.StatusBadRequest, "title is too long")
@@ -222,7 +250,7 @@ func (s *Server) updateAsset(w http.ResponseWriter, r *http.Request) {
 	if s.assetErr(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, s.view(a))
+	writeJSON(w, http.StatusOK, s.viewAs(a, level))
 }
 
 // optionalString records whether a JSON field was present at all.
@@ -269,10 +297,24 @@ func (s *Server) deleteAsset(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	owner := who(r).UserID
+	current, level, err := s.assetAccess(r.Context(), who(r), id)
+	if s.assetErr(w, r, err) {
+		return
+	}
+	if level < accessEdit {
+		writeErr(w, http.StatusForbidden, "you can only view this")
+		return
+	}
+	permanent := r.URL.Query().Get("permanent") == "1"
+	// Edit rights reach as far as the trash. The owner can still restore from
+	// there; emptying it is the owner's alone.
+	if permanent && level < accessOwner {
+		writeErr(w, http.StatusForbidden, "only the owner can delete for good")
+		return
+	}
+	owner := current.OwnerID
 	var n int64
-	var err error
-	if r.URL.Query().Get("permanent") == "1" {
+	if permanent {
 		n, err = s.store.PurgeAssets(r.Context(), owner, []string{id})
 	} else {
 		n, err = s.store.TrashAssets(r.Context(), owner, []string{id})

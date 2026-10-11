@@ -17,6 +17,7 @@ const uuid = () => `00000000-0000-7000-8000-${String(++seq).padStart(12, '0')}`
 
 const collections = ['screenshots', 'gifs', 'stickers'].map((name) => ({ id: uuid(), name, created_at: new Date().toISOString() }))
 const tokens = []
+const shares = []
 const KINDS = ['image', 'image', 'image', 'gif', 'video', 'sticker', 'file']
 const assets = Array.from({ length: 150 }, (_, i) => makeAsset(i))
 
@@ -53,6 +54,7 @@ function view(a) {
   const media = a.kind !== 'file' && a.status === 'ready'
   return {
     ...a,
+    access: 'owner',
     variants: media ? ['thumb', ...(a.kind === 'video' ? ['gif'] : [])] : [],
     urls: {
       file: a.status === 'ready' ? `${file}?v=mock` : undefined,
@@ -96,6 +98,7 @@ const routes = [
   ['POST', /^\/v1\/auth\/logout$/, () => ((signedIn = false), [204])],
   ['GET', /^\/v1\/me$/, () => [200, {
     user: { id: 'u1', email: 'you@example.com' },
+    member: true,
     limits: { max_upload_bytes: 500 << 20, gif_max_seconds: 30, trash_retention_days: 30 },
     public_url: PUBLIC,
   }]],
@@ -166,6 +169,18 @@ const routes = [
   }],
   ['DELETE', /^\/v1\/collections\/([^/]+)$/, (req, m) => {
     collections.splice(collections.findIndex((c) => c.id === m[1]), 1)
+    return [204]
+  }],
+  ['GET', /^\/v1\/shared$/, () => [200, { jars: [], items: [] }]],
+  ['GET', /^\/v1\/shares$/, () => [200, { shares }]],
+  ['POST', /^\/v1\/shares$/, async (req) => {
+    const share = { id: uuid(), collection_id: null, asset_id: null, ...(await body(req)), created_at: new Date().toISOString(), invite_url: `${PUBLIC}/?invite=${'m'.repeat(40)}` }
+    shares.push(share)
+    return [201, share]
+  }],
+  ['PATCH', /^\/v1\/shares\/([^/]+)$/, async (req, m) => [200, Object.assign(shares.find((s) => s.id === m[1]), await body(req))]],
+  ['DELETE', /^\/v1\/shares\/([^/]+)$/, (req, m) => {
+    shares.splice(shares.findIndex((s) => s.id === m[1]), 1)
     return [204]
   }],
   ['GET', /^\/v1\/tokens$/, () => [200, { tokens }]],

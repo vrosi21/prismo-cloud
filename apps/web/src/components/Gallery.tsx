@@ -13,6 +13,8 @@ interface GalleryProps {
   selected: Set<string>
   onOpen: (asset: Asset) => void
   onToggle: (id: string) => void
+  /** false where there is nothing to do with a selection (shared views). */
+  selectable?: boolean
   hasMore: boolean
   loadingMore: boolean
   loadMore: () => void
@@ -21,7 +23,7 @@ interface GalleryProps {
 // Only the rows near the viewport exist in the DOM. A library of 50,000
 // items scrolls like one of 50, because the page never holds more than a
 // few dozen tiles at once.
-export function Gallery({ assets, selected, onOpen, onToggle, hasMore, loadingMore, loadMore }: GalleryProps) {
+export function Gallery({ assets, selected, onOpen, onToggle, selectable = true, hasMore, loadingMore, loadMore }: GalleryProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const track = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
@@ -76,6 +78,7 @@ export function Gallery({ assets, selected, onOpen, onToggle, hasMore, loadingMo
                 size={tile}
                 selected={selected.has(asset.id)}
                 selecting={selecting}
+                selectable={selectable}
                 onOpen={onOpen}
                 onToggle={onToggle}
               />
@@ -97,11 +100,12 @@ interface CardProps {
   size: number
   selected: boolean
   selecting: boolean
+  selectable: boolean
   onOpen: (asset: Asset) => void
   onToggle: (id: string) => void
 }
 
-function AssetCard({ asset, size, selected, selecting, onOpen, onToggle }: CardProps) {
+function AssetCard({ asset, size, selected, selecting, selectable, onOpen, onToggle }: CardProps) {
   const [hover, setHover] = useState(false)
   const ready = asset.status === 'ready'
   const still = asset.urls.thumb ?? (asset.kind === 'image' || asset.kind === 'sticker' ? asset.urls.file : undefined)
@@ -123,7 +127,7 @@ function AssetCard({ asset, size, selected, selecting, onOpen, onToggle }: CardP
         onClick={() => (selecting ? onToggle(asset.id) : onOpen(asset))}
         onKeyDown={(e) => {
           if (e.key === 'Enter') onOpen(asset)
-          if (e.key === ' ') {
+          if (e.key === ' ' && selectable) {
             e.preventDefault()
             onToggle(asset.id)
           }
@@ -165,6 +169,7 @@ function AssetCard({ asset, size, selected, selecting, onOpen, onToggle }: CardP
           </span>
         )}
 
+        {selectable && (
         <button
           type="button"
           aria-label={selected ? 'deselect' : 'select'}
@@ -179,6 +184,7 @@ function AssetCard({ asset, size, selected, selecting, onOpen, onToggle }: CardP
         >
           {selected ? 'x' : ''}
         </button>
+        )}
       </div>
       <div className="mt-[7px] truncate text-[18px]" title={displayName(asset)}>
         {displayName(asset)}

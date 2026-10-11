@@ -26,6 +26,20 @@ export function useAssets(filter: AssetFilter) {
   })
 }
 
+export const useShared = () => useQuery({ queryKey: ['shared'], queryFn: api.shared })
+
+// Key starts with 'assets' on purpose: whatever refreshes the library
+// refreshes an open shared jar as well.
+export function useSharedJarAssets(id: string, filter: AssetFilter) {
+  return useInfiniteQuery({
+    queryKey: ['assets', 'shared-jar', id, filter],
+    queryFn: ({ pageParam }) => api.sharedJarAssets(id, filter, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    refetchInterval: (q) => (q.state.data?.pages.some((p) => p.assets.some((a) => a.status === 'processing')) ? 1500 : false),
+  })
+}
+
 // Everything that shows assets or counts of them.
 export function useRefreshLibrary() {
   const qc = useQueryClient()
@@ -33,5 +47,6 @@ export function useRefreshLibrary() {
     void qc.invalidateQueries({ queryKey: ['assets'] })
     void qc.invalidateQueries({ queryKey: ['collections'] })
     void qc.invalidateQueries({ queryKey: ['stats'] })
+    void qc.invalidateQueries({ queryKey: ['shared'] })
   }, [qc])
 }

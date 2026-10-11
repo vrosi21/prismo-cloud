@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { api, type AssetFilter, type BulkAction, type Visibility } from '../api'
 import { AssetModal } from '../components/AssetModal'
 import { Gallery } from '../components/Gallery'
+import { ShareDialog } from '../components/ShareDialog'
 import { BmoFace, Cube, Prismo } from '../components/sprites'
 import { errorText, log } from '../lib/log'
 import { useAssets, useCollections, useMe, useRefreshLibrary } from '../lib/queries'
@@ -37,6 +38,7 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [openId, setOpenId] = useState<string | null>(null)
   const [confirmPurge, setConfirmPurge] = useState(false)
+  const [sharingJar, setSharingJar] = useState(false)
 
   useEffect(() => {
     setSelected(new Set())
@@ -106,6 +108,11 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
             {tag && (
               <button type="button" className="chip" onClick={() => dropParam('tag')} title="clear tag">
                 #{tag} x
+              </button>
+            )}
+            {!trashed && collection && collection !== 'none' && (
+              <button type="button" className="btn btn-sm" onClick={() => setSharingJar(true)}>
+                share jar
               </button>
             )}
             {trashed && me && (
@@ -213,6 +220,7 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
       </div>
 
       {open && <AssetModal asset={open} collections={collections} onClose={close} onStep={step} />}
+      {sharingJar && collection && <ShareDialog target={{ collection_id: collection }} name={title} onClose={() => setSharingJar(false)} />}
     </div>
   )
 }

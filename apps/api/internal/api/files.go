@@ -89,13 +89,14 @@ func (s *Server) serveAsset(w http.ResponseWriter, r *http.Request, a store.Asse
 	http.ServeContent(w, r, "", modified, obj)
 }
 
-// assetFile serves a file to its owner, trashed or not.
+// assetFile serves a file to its owner (trashed or not) and to anyone it is
+// shared with.
 func (s *Server) assetFile(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
 		return
 	}
-	a, err := s.store.GetAsset(r.Context(), who(r).UserID, id)
+	a, _, err := s.assetAccess(r.Context(), who(r), id)
 	if s.assetErr(w, r, err) {
 		return
 	}
@@ -127,14 +128,25 @@ func (s *Server) waitReady(ctx context.Context, slug string) (store.Asset, error
 	}
 }
 
-// canView: shared assets are open to anyone holding the link; private ones
-// only to their owner.
+// canView: assets shared by link are open to anyone holding the link; private
+// ones only to their owner and the people they were shared with.
 func (s *Server) canView(r *http.Request, a store.Asset) bool {
 	if a.Visibility != "private" {
 		return true
 	}
 	p, err := s.authenticate(r)
-	return err == nil && p != nil && p.UserID == a.OwnerID && p.Level >= levelFull
+	if err != nil || p == nil || p.Level < levelFull {
+		return false
+	}
+	if p.UserID == a.OwnerID {
+		return true
+	}
+	key := p.shareKey()
+	if key == "" {
+		return false
+	}
+	role, err := s.store.ShareRole(r.Context(), key, a.ID, a.CollectionID)
+	return err == nil && role != ""
 }
 
 func (s *Server) sharedAsset(w http.ResponseWriter, r *http.Request, slug string) (store.Asset, bool) {

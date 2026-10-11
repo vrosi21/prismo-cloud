@@ -56,11 +56,17 @@ const assetCols = `a.id::text, a.owner_id::text, a.collection_id::text, a.blob_s
 	a.kind, a.status, a.error, a.title, a.filename, a.mime, a.bytes, a.width, a.height,
 	a.duration_ms, a.visibility, a.slug, a.source, a.tags, a.created_at, a.updated_at, a.deleted_at`
 
+// assetDest lists where the columns of assetCols are scanned to, in order.
+// Queries that select more than assetCols append their own targets.
+func assetDest(a *Asset) []any {
+	return []any{&a.ID, &a.OwnerID, &a.CollectionID, &a.BlobSHA, &a.ExpectedSHA,
+		&a.Kind, &a.Status, &a.Error, &a.Title, &a.Filename, &a.Mime, &a.Bytes, &a.Width, &a.Height,
+		&a.DurationMS, &a.Visibility, &a.Slug, &a.Source, &a.Tags, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt}
+}
+
 func scanAsset(row pgx.Row) (Asset, error) {
 	var a Asset
-	err := row.Scan(&a.ID, &a.OwnerID, &a.CollectionID, &a.BlobSHA, &a.ExpectedSHA,
-		&a.Kind, &a.Status, &a.Error, &a.Title, &a.Filename, &a.Mime, &a.Bytes, &a.Width, &a.Height,
-		&a.DurationMS, &a.Visibility, &a.Slug, &a.Source, &a.Tags, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt)
+	err := row.Scan(assetDest(&a)...)
 	if a.Tags == nil {
 		a.Tags = []string{}
 	}
@@ -107,9 +113,18 @@ func (s *Store) GetAsset(ctx context.Context, ownerID, id string) (Asset, error)
 	return a, s.attachVariants(ctx, []*Asset{&a})
 }
 
-// AssetByID ignores ownership; only the worker uses it.
+// AssetByID ignores ownership. The worker uses it, and so does the API's
+// access check, which decides afterwards what the caller may do with it.
 func (s *Store) AssetByID(ctx context.Context, id string) (Asset, error) {
 	return scanAsset(s.Pool.QueryRow(ctx, `select `+assetCols+` from assets a where a.id = $1`, id))
+}
+
+func (s *Store) AssetWithVariants(ctx context.Context, id string) (Asset, error) {
+	a, err := s.AssetByID(ctx, id)
+	if err != nil {
+		return a, err
+	}
+	return a, s.attachVariants(ctx, []*Asset{&a})
 }
 
 func (s *Store) AssetBySlug(ctx context.Context, slug string) (Asset, error) {

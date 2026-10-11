@@ -2,6 +2,8 @@
 
 export type Visibility = 'private' | 'unlisted' | 'public'
 export type Kind = 'image' | 'gif' | 'video' | 'sticker' | 'file'
+export type Access = 'owner' | 'edit' | 'view'
+export type Role = 'view' | 'edit'
 export type Status = 'pending' | 'processing' | 'ready' | 'failed'
 
 export interface Asset {
@@ -26,6 +28,8 @@ export interface Asset {
   deleted_at: string | null
   variants: string[]
   urls: Record<string, string | undefined>
+  /** What the signed-in person may do with it. */
+  access: Access
 }
 
 export interface Collection {
@@ -45,8 +49,45 @@ export interface Token {
 
 export interface Me {
   user: { id: string; email: string }
+  /** false for a guest: someone who only reaches what was shared with them. */
+  member: boolean
   limits: { max_upload_bytes: number; gif_max_seconds: number; trash_retention_days: number }
   public_url: string
+}
+
+export interface Share {
+  id: string
+  collection_id: string | null
+  asset_id: string | null
+  email: string
+  role: Role
+  created_at: string
+  /** Link to send to the invited person. */
+  invite_url: string
+}
+
+/** What gets shared: one jar or one item. */
+export type ShareTarget = { collection_id: string } | { asset_id: string }
+
+export interface SharedJar {
+  id: string
+  name: string
+  role: Role
+  owner: string
+  count: number
+}
+
+export interface SharedItem extends Asset {
+  owner: string
+}
+
+export interface Invite {
+  email: string
+  role: Role
+  owner: string
+  name: string
+  collection_id: string | null
+  asset_id: string | null
 }
 
 export interface Stats {
@@ -129,6 +170,7 @@ function query(params: Record<string, string | undefined>): string {
 export const api = {
   authConfig: () => request<{ google: boolean; dev: boolean }>('GET', '/v1/auth/config'),
   devLogin: () => request<void>('POST', '/v1/auth/dev'),
+  invite: (token: string) => request<Invite>('GET', `/v1/invites/${token}`),
   logout: () => request<void>('POST', '/v1/auth/logout'),
   me: () => request<Me>('GET', '/v1/me'),
   stats: () => request<Stats>('GET', '/v1/stats'),
@@ -141,6 +183,8 @@ export const api = {
     ),
   asset: (id: string) => request<Asset>('GET', `/v1/assets/${id}`),
   patchAsset: (id: string, patch: AssetPatch) => request<Asset>('PATCH', `/v1/assets/${id}`, patch),
+  // One item at a time: unlike bulk, this also works on items shared with you for editing.
+  trashAsset: (id: string) => request<void>('DELETE', `/v1/assets/${id}`),
   bulk: (ids: string[], change: BulkAction) => request<{ changed: number }>('POST', '/v1/assets/bulk', { ids, ...change }),
 
   createUpload: (u: NewUpload) => request<UploadTicket>('POST', '/v1/assets', u),
@@ -150,6 +194,22 @@ export const api = {
   createCollection: (name: string) => request<Collection>('POST', '/v1/collections', { name }),
   renameCollection: (id: string, name: string) => request<void>('PATCH', `/v1/collections/${id}`, { name }),
   deleteCollection: (id: string) => request<void>('DELETE', `/v1/collections/${id}`),
+
+  shares: (target: ShareTarget) =>
+    request<{ shares: Share[] }>(
+      'GET',
+      '/v1/shares' + query('collection_id' in target ? { collection: target.collection_id } : { asset: target.asset_id }),
+    ).then((r) => r.shares),
+  createShare: (target: ShareTarget, email: string, role: Role) => request<Share>('POST', '/v1/shares', { ...target, email, role }),
+  updateShare: (id: string, role: Role) => request<Share>('PATCH', `/v1/shares/${id}`, { role }),
+  deleteShare: (id: string) => request<void>('DELETE', `/v1/shares/${id}`),
+
+  shared: () => request<{ jars: SharedJar[]; items: SharedItem[] }>('GET', '/v1/shared'),
+  sharedJarAssets: (id: string, f: AssetFilter, cursor?: string) =>
+    request<AssetPage & { jar: { id: string; name: string; role: Role } }>(
+      'GET',
+      `/v1/shared/jars/${id}/assets` + query({ kind: f.kind, tag: f.tag, q: f.q, cursor }),
+    ),
 
   tokens: () => request<{ tokens: Token[] }>('GET', '/v1/tokens').then((r) => r.tokens),
   createToken: (name: string, scope: Token['scope'], default_visibility: Visibility) =>

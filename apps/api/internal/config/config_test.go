@@ -8,6 +8,8 @@ func TestEmailAllowed(t *testing.T) {
 		"owner@gmail.com":       true,
 		"Owner@Gmail.com":       true, // addresses are not case sensitive
 		" owner@gmail.com ":     true,
+		"o.w.n.e.r@gmail.com":   true, // Gmail ignores dots
+		"owner+x@gmail.com":     true, // and +tags
 		"other@gmail.com":       false,
 		"owner@gmail.com.evil":  false,
 		"xowner@gmail.com":      false,

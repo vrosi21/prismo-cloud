@@ -68,6 +68,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/auth/google/callback", s.googleCallback)
 		r.Post("/auth/dev", s.devLogin)
 		r.Post("/auth/logout", s.logout)
+		r.Get("/invites/{token}", s.inviteInfo)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.require(levelUpload))
@@ -82,25 +83,36 @@ func (s *Server) Router() http.Handler {
 			r.Get("/stats", s.stats)
 			r.Get("/tags", s.tags)
 			r.Get("/assets", s.listAssets)
-			r.Post("/assets/bulk", s.bulkAssets)
 			r.Get("/assets/{id}", s.getAsset)
 			r.Patch("/assets/{id}", s.updateAsset)
 			r.Delete("/assets/{id}", s.deleteAsset)
 			r.Post("/assets/{id}/restore", s.restoreAsset)
 			r.Get("/assets/{id}/file", s.assetFile)
 			r.Get("/collections", s.listCollections)
-			r.Post("/collections", s.createCollection)
-			r.Patch("/collections/{id}", s.renameCollection)
-			r.Delete("/collections/{id}", s.deleteCollection)
+			r.Get("/shared", s.sharedWithMe)
+			r.Get("/shared/jars/{id}/assets", s.sharedJarAssets)
+
+			// A guest has no library of their own to organise.
+			r.Group(func(r chi.Router) {
+				r.Use(s.memberOnly)
+				r.Post("/assets/bulk", s.bulkAssets)
+				r.Post("/collections", s.createCollection)
+				r.Patch("/collections/{id}", s.renameCollection)
+				r.Delete("/collections/{id}", s.deleteCollection)
+			})
 		})
 
-		// Minting tokens needs a real login, so a token can never create a
-		// stronger token.
+		// Minting tokens and sharing need a real login by a member, so a token
+		// can never create a stronger token or hand out access.
 		r.Group(func(r chi.Router) {
-			r.Use(s.require(levelSession))
+			r.Use(s.require(levelSession), s.memberOnly)
 			r.Get("/tokens", s.listTokens)
 			r.Post("/tokens", s.createToken)
 			r.Delete("/tokens/{id}", s.deleteToken)
+			r.Get("/shares", s.listShares)
+			r.Post("/shares", s.createShare)
+			r.Patch("/shares/{id}", s.updateShare)
+			r.Delete("/shares/{id}", s.deleteShare)
 		})
 	})
 	return r
@@ -108,11 +120,24 @@ func (s *Server) Router() http.Handler {
 
 // --- Auth middleware ----------------------------------------------------------
 
+// principal is who is making a request.
 type principal struct {
 	UserID string
-	Email  string
+	Email  string // empty for API tokens
 	Level  int
 	Token  *store.APIToken
+	// Member: on the list of people who have a library here. Everyone else
+	// who can sign in is a guest and only reaches what was shared with them.
+	Member bool
+}
+
+// shareKey is the form the account's address has in the shares table. API
+// tokens have none: a token acts for its owner only.
+func (p *principal) shareKey() string {
+	if p.Email == "" {
+		return ""
+	}
+	return auth.EmailKey(p.Email)
 }
 
 type principalKey struct{}
@@ -135,7 +160,8 @@ func (s *Server) authenticate(r *http.Request) (*principal, error) {
 		if t.Scope == "full" {
 			level = levelFull
 		}
-		return &principal{UserID: t.OwnerID, Level: level, Token: &t}, nil
+		// Only members can mint tokens, so a token always speaks for one.
+		return &principal{UserID: t.OwnerID, Level: level, Token: &t, Member: true}, nil
 	}
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 		u, err := s.store.UserBySession(r.Context(), auth.HashSecret(c.Value))
@@ -145,7 +171,7 @@ func (s *Server) authenticate(r *http.Request) (*principal, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &principal{UserID: u.ID, Email: u.Email, Level: levelSession}, nil
+		return &principal{UserID: u.ID, Email: u.Email, Level: levelSession, Member: s.isMember(u.Email)}, nil
 	}
 	return nil, nil
 }
@@ -166,6 +192,22 @@ func (s *Server) require(level int) func(http.Handler) http.Handler {
 			}
 		})
 	}
+}
+
+// isMember: listed in ALLOWED_EMAILS, or the development account.
+func (s *Server) isMember(email string) bool {
+	return s.cfg.EmailAllowed(email) || (s.cfg.DevLogin && email == devEmail)
+}
+
+// memberOnly keeps guests out of everything that manages a library.
+func (s *Server) memberOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !who(r).Member {
+			writeErr(w, http.StatusForbidden, "guests cannot do that")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // originOnly makes the server deaf to anyone but the Cloudflare proxy, when

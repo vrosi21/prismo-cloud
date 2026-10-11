@@ -234,6 +234,128 @@ check('stats', r.status === 200 && r.json.assets >= 4 && r.json.bytes > 0, JSON.
 r = await call('GET', '/v1/tags')
 check('tags', r.json.tags.some((t) => t.tag === 'a'))
 
+// --- sharing with a specific person ---
+const ownerCookie = cookie
+const jar = (await call('GET', '/v1/collections')).json.collections.find((c) => c.name === 'screenshots')
+const otherJar = (await call('GET', '/v1/collections')).json.collections.find((c) => c.name === 'gifs')
+const inJar = slot.asset.id // direct.png: in "screenshots", private
+const outside = vid.id // clip.mp4: in "gifs", private
+const signInAs = async (email) => {
+  const res = await fetch(BASE + '/v1/auth/dev', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
+  return { status: res.status, cookie: (res.headers.get('set-cookie') ?? '').split(';')[0] }
+}
+
+r = await signInAs('guest@example.com')
+check('someone nothing is shared with cannot sign in', r.status === 403)
+r = await call('POST', '/v1/shares', { body: { collection_id: jar.id, email: 'Guest@Example.com', role: 'view' } })
+const share = r.json
+check('owner shares a jar (view)', r.status === 201 && share.email === 'guest@example.com' && share.invite_url.startsWith(BASE + '/?invite='), r.text.slice(0, 120))
+r = await fetch(`${BASE}/v1/invites/${share.invite_url.split('invite=')[1]}`)
+const inv = await r.json()
+check('invitation link names the invited account, no sign-in needed', r.status === 200 && inv.email === 'guest@example.com' && inv.name === 'screenshots' && inv.role === 'view' && inv.owner === 'dev@localhost', JSON.stringify(inv))
+r = await fetch(`${BASE}/v1/invites/${'x'.repeat(40)}`)
+check('unknown invitation is 404', r.status === 404)
+r = await call('POST', '/v1/shares', { body: { collection_id: otherJar.id, email: 'nobody', role: 'view' } })
+check('share needs a real address', r.status === 400)
+r = await call('POST', '/v1/shares', { body: { collection_id: jar.id, email: 'x@example.com', role: 'admin' } })
+check('share needs a known role', r.status === 400)
+
+const guest = await signInAs('guest@example.com')
+check('invited guest can sign in', guest.status === 204 && guest.cookie.startsWith('prismo_session='))
+cookie = guest.cookie
+r = await call('GET', '/v1/me')
+check('guest is not a member', r.json.member === false && r.json.user.email === 'guest@example.com')
+r = await call('GET', '/v1/shared')
+check('guest sees the shared jar', r.json.jars.length === 1 && r.json.jars[0].id === jar.id && r.json.jars[0].role === 'view' && r.json.jars[0].owner === 'dev@localhost', JSON.stringify(r.json.jars))
+r = await call('GET', `/v1/shared/jars/${jar.id}/assets`)
+check('guest can list the shared jar, read-only', r.status === 200 && r.json.assets.some((x) => x.id === inJar) && r.json.assets.every((x) => x.access === 'view' && x.collection_id === jar.id) && r.json.jar.name === 'screenshots')
+r = await call('GET', `/v1/assets/${inJar}/file`)
+check('guest can open a file in it', r.status === 200)
+r = await call('GET', '/v1/assets')
+check('guest has no library of their own', r.json.assets.length === 0)
+r = await call('GET', `/v1/assets/${outside}`)
+check('guest cannot reach items outside the jar', r.status === 404)
+r = await call('GET', `/v1/shared/jars/${otherJar.id}/assets`)
+check('guest cannot list a jar that was not shared', r.status === 404)
+r = await call('GET', `/v1/shared/jars/${jar.id}/assets?collection=${otherJar.id}`)
+check('query string cannot widen the listing', r.json.assets.every((x) => x.collection_id === jar.id))
+r = await call('PATCH', `/v1/assets/${inJar}`, { body: { title: 'changed' } })
+check('view cannot rename', r.status === 403)
+r = await call('DELETE', `/v1/assets/${inJar}`)
+check('view cannot delete', r.status === 403)
+r = await call('POST', '/v1/assets', { body: { filename: 'g.png', bytes: 10, collection_id: jar.id } })
+check('view cannot add files', r.status === 400, r.json?.error)
+r = await call('POST', '/v1/assets', { body: { filename: 'g.png', bytes: 10 } })
+check('guest cannot upload into a library of their own', r.status === 400, r.json?.error)
+r = await call('POST', '/v1/tokens', { body: { name: 'x', scope: 'full' } })
+check('guest cannot mint tokens', r.status === 403)
+r = await call('POST', '/v1/shares', { body: { collection_id: jar.id, email: 'third@example.com', role: 'view' } })
+check('guest cannot pass access on', r.status === 403)
+r = await call('POST', '/v1/collections', { body: { name: 'mine' } })
+check('guest cannot create jars', r.status === 403)
+
+cookie = ownerCookie
+r = await call('PATCH', `/v1/shares/${share.id}`, { body: { role: 'edit' } })
+check('owner upgrades the share to edit', r.status === 200 && r.json.role === 'edit')
+cookie = guest.cookie
+r = await call('PATCH', `/v1/assets/${inJar}`, { body: { title: 'renamed by guest', tags: ['shared'] } })
+check('edit can rename and tag', r.status === 200 && r.json.title === 'renamed by guest' && r.json.access === 'edit')
+r = await call('PATCH', `/v1/assets/${inJar}`, { body: { visibility: 'public' } })
+check('edit cannot change who can see it', r.status === 403)
+r = await call('PATCH', `/v1/assets/${inJar}`, { body: { collection_id: null } })
+check('edit cannot move it out of the jar', r.status === 403)
+const guestFile = Buffer.concat([media('t.png'), Buffer.from('from-guest')])
+r = await call('POST', '/v1/assets', { body: { filename: 'from-guest.png', bytes: guestFile.length, collection_id: jar.id, visibility: 'public' } })
+const guestSlot = r.json
+check('edit can start an upload into the jar, but not make it public', r.status === 201 && guestSlot.asset.visibility === 'private', r.text.slice(0, 140))
+await fetch(guestSlot.upload.url, { method: 'PUT', body: guestFile })
+r = await call('POST', `/v1/assets/${guestSlot.asset.id}/complete`)
+check('guest completes the upload', r.status === 200, r.text.slice(0, 120))
+a = await waitReady(guestSlot.asset.id)
+check('guest upload gets processed', a?.status === 'ready' && a.access === 'edit', JSON.stringify({ s: a?.status, acc: a?.access, e: a?.error }))
+cookie = ownerCookie
+r = await call('GET', `/v1/assets/${guestSlot.asset.id}`)
+check('the file belongs to the jar owner and is private', r.status === 200 && r.json.access === 'owner' && r.json.visibility === 'private' && r.json.source === 'guest' && r.json.collection_id === jar.id)
+cookie = guest.cookie
+r = await call('DELETE', `/v1/assets/${guestSlot.asset.id}?permanent=1`)
+check('edit cannot delete for good', r.status === 403)
+r = await call('DELETE', `/v1/assets/${guestSlot.asset.id}`)
+check('edit can move to trash', r.status === 204)
+r = await call('GET', `/v1/assets/${guestSlot.asset.id}`)
+check('a trashed item disappears for the guest', r.status === 404)
+cookie = ownerCookie
+r = await call('GET', '/v1/assets?trashed=1')
+check('owner finds it in the trash and can restore it', r.json.assets.some((x) => x.id === guestSlot.asset.id))
+
+r = await call('POST', '/v1/shares', { body: { asset_id: outside, email: 'guest@example.com', role: 'view' } })
+const itemShare = r.json
+check('owner shares one item', r.status === 201 && itemShare.asset_id === outside)
+const outsideSlug = (await call('GET', `/v1/assets/${outside}`)).json.slug
+cookie = guest.cookie
+r = await call('GET', '/v1/shared')
+check('guest sees the single item', r.json.items.length === 1 && r.json.items[0].id === outside && r.json.items[0].access === 'view' && r.json.items[0].owner === 'dev@localhost')
+r = await call('GET', `/i/${outsideSlug}`)
+check('its private link opens for the invited guest', r.status === 200)
+r = await fetch(`${BASE}/i/${outsideSlug}`)
+check('and stays closed to everyone else', r.status === 404)
+r = await fetch(`${BASE}/v1/assets/${png.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{"title":"x"}' })
+check('a public link gives no way to edit', r.status === 401)
+
+cookie = ownerCookie
+r = await call('GET', `/v1/shares?collection=${jar.id}`)
+check('owner lists who a jar is shared with', r.json.shares.length === 1 && r.json.shares[0].email === 'guest@example.com' && r.json.shares[0].role === 'edit')
+r = await call('DELETE', `/v1/shares/${share.id}`)
+await call('DELETE', `/v1/shares/${itemShare.id}`)
+check('owner revokes', r.status === 204)
+cookie = guest.cookie
+r = await call('GET', `/v1/assets/${inJar}`)
+check('after revoking, the guest is locked out at once', r.status === 404)
+r = await call('GET', '/v1/shared')
+check('and sees nothing shared', r.json.jars.length === 0 && r.json.items.length === 0)
+r = await signInAs('guest@example.com')
+check('and cannot sign in again', r.status === 403)
+cookie = ownerCookie
+
 // --- logout ---
 r = await call('POST', '/v1/auth/logout')
 r = await call('GET', '/v1/me')

@@ -11,8 +11,9 @@ export function Settings({ me }: { me: Me }) {
     <div className="h-full overflow-y-auto px-2 pt-2">
       <div className="mx-auto flex max-w-[860px] flex-col gap-6 pb-8">
         <Look />
-        <CaptureClients publicUrl={me.public_url} />
-        <Jars />
+        {/* Tokens and jars belong to a library; a guest has none. */}
+        {me.member && <CaptureClients publicUrl={me.public_url} />}
+        {me.member && <Jars />}
         <Account email={me.user.email} />
       </div>
     </div>

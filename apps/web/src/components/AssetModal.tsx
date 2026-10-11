@@ -4,6 +4,7 @@ import { api, type Asset, type AssetPatch, type BulkAction, type Collection, typ
 import { bytes, copyImage, copyText, displayName, duration, when } from '../lib/format'
 import { errorText, log } from '../lib/log'
 import { useRefreshLibrary } from '../lib/queries'
+import { ShareDialog } from './ShareDialog'
 
 interface Props {
   asset: Asset
@@ -88,7 +89,11 @@ function Details({ asset, collections, onClose }: { asset: Asset; collections: C
   const [title, setTitle] = useState(asset.title)
   const [tags, setTags] = useState(asset.tags.join(', '))
   const [confirmPurge, setConfirmPurge] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const trashed = asset.deleted_at !== null
+  // owner: everything. edit: rename, tag, trash. view: look and download.
+  const owner = asset.access === 'owner'
+  const canEdit = owner || asset.access === 'edit'
 
   const save = useMutation({
     mutationFn: (patch: AssetPatch) => api.patchAsset(asset.id, patch),
@@ -100,7 +105,16 @@ function Details({ asset, collections, onClose }: { asset: Asset; collections: C
     onSuccess: (_, change) => {
       refresh()
       onClose()
-      log('ok', change.action === 'trash' ? 'moved to trash' : change.action === 'restore' ? 'restored' : 'gone for good')
+      log('ok', change.action === 'restore' ? 'restored' : 'gone for good')
+    },
+    onError: (e) => log('err', errorText(e)),
+  })
+  const trash = useMutation({
+    mutationFn: () => api.trashAsset(asset.id),
+    onSuccess: () => {
+      refresh()
+      onClose()
+      log('ok', 'moved to trash')
     },
     onError: (e) => log('err', errorText(e)),
   })
@@ -147,89 +161,98 @@ function Details({ asset, collections, onClose }: { asset: Asset; collections: C
       <p className="dim text-[18px] leading-tight">
         {facts.join(' · ')}
         <br />
-        added {when(asset.created_at)} · via {asset.source}
+        added {when(asset.created_at)}
+        {owner && ` · via ${asset.source}`}
       </p>
+      {!owner && <p className="dim text-[17px]">&gt; shared with you: {canEdit ? 'you may rename, tag and move it to trash' : 'view only'}.</p>}
 
-      <label>
-        <span className="label">title</span>
-        <input
-          className="field"
-          value={title}
-          placeholder={asset.filename}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => title !== asset.title && save.mutate({ title })}
-          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-        />
-      </label>
+      {canEdit && (
+        <>
+          <label>
+            <span className="label">title</span>
+            <input
+              className="field"
+              value={title}
+              placeholder={asset.filename}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={() => title !== asset.title && save.mutate({ title })}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            />
+          </label>
 
-      <label>
-        <span className="label">tags, comma separated</span>
-        <input
-          className="field"
-          value={tags}
-          placeholder="cat, reaction"
-          onChange={(e) => setTags(e.target.value)}
-          onBlur={saveTags}
-          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-        />
-      </label>
+          <label>
+            <span className="label">tags, comma separated</span>
+            <input
+              className="field"
+              value={tags}
+              placeholder="cat, reaction"
+              onChange={(e) => setTags(e.target.value)}
+              onBlur={saveTags}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            />
+          </label>
+        </>
+      )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <label>
-          <span className="label">pickle jar</span>
-          <select
-            className="field"
-            value={asset.collection_id ?? ''}
-            onChange={(e) => save.mutate({ collection_id: e.target.value || null })}
-          >
-            <option value="">none</option>
-            {collections.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="label">who can see</span>
-          <select
-            className="field"
-            value={asset.visibility}
-            onChange={(e) => save.mutate({ visibility: e.target.value as Visibility })}
-          >
-            <option value="private">private</option>
-            <option value="unlisted">unlisted</option>
-            <option value="public">public</option>
-          </select>
-        </label>
-      </div>
-      <p className="dim -mt-2 text-[17px]">&gt; {VISIBILITY_HINT[asset.visibility]}</p>
+      {owner && (
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <label>
+              <span className="label">pickle jar</span>
+              <select className="field" value={asset.collection_id ?? ''} onChange={(e) => save.mutate({ collection_id: e.target.value || null })}>
+                <option value="">none</option>
+                {collections.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="label">anyone with link</span>
+              <select className="field" value={asset.visibility} onChange={(e) => save.mutate({ visibility: e.target.value as Visibility })}>
+                <option value="private">private</option>
+                <option value="unlisted">unlisted</option>
+                <option value="public">public</option>
+              </select>
+            </label>
+          </div>
+          <p className="dim -mt-2 text-[17px]">&gt; {VISIBILITY_HINT[asset.visibility]}</p>
 
-      {isPicture && (
-        <label className="flex cursor-pointer items-center gap-3">
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-[var(--accent-deep)]"
-            checked={asset.kind === 'sticker'}
-            onChange={(e) => save.mutate({ kind: e.target.checked ? 'sticker' : 'image' })}
-          />
-          <span>use as sticker</span>
-        </label>
+          {isPicture && (
+            <label className="flex cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-[var(--accent-deep)]"
+                checked={asset.kind === 'sticker'}
+                onChange={(e) => save.mutate({ kind: e.target.checked ? 'sticker' : 'image' })}
+              />
+              <span>use as sticker</span>
+            </label>
+          )}
+        </>
       )}
 
       {!trashed && asset.status === 'ready' && (
         <div className="flex flex-wrap gap-x-3 gap-y-4 pt-1">
-          <button type="button" className="btn btn-accent" onClick={() => share('link', asset.urls.raw)}>
-            {asset.visibility === 'private' ? 'share + copy link' : 'copy link'}
-          </button>
-          {asset.variants.includes('gif') && (
-            <button type="button" className="btn" onClick={() => share('gif link', asset.urls.raw_gif)}>
-              copy gif link
-            </button>
+          {owner && (
+            <>
+              <button type="button" className="btn btn-accent" onClick={() => share('link', asset.urls.raw)}>
+                {asset.visibility === 'private' ? 'share + copy link' : 'copy link'}
+              </button>
+              {asset.variants.includes('gif') && (
+                <button type="button" className="btn" onClick={() => share('gif link', asset.urls.raw_gif)}>
+                  copy gif link
+                </button>
+              )}
+              <button type="button" className="btn" onClick={() => share('page link', asset.urls.share)}>
+                copy page link
+              </button>
+              <button type="button" className="btn" onClick={() => setSharing(true)}>
+                share with a person
+              </button>
+            </>
           )}
-          <button type="button" className="btn" onClick={() => share('page link', asset.urls.share)}>
-            copy page link
-          </button>
           {isPicture && (
             <button type="button" className="btn" onClick={copyPicture}>
               copy image
@@ -243,9 +266,11 @@ function Details({ asset, collections, onClose }: { asset: Asset; collections: C
 
       <div className="mt-auto flex flex-wrap gap-x-3 gap-y-4 pt-3">
         {!trashed ? (
-          <button type="button" className="btn" disabled={bulk.isPending} onClick={() => bulk.mutate({ action: 'trash' })}>
-            move to trash
-          </button>
+          canEdit && (
+            <button type="button" className="btn" disabled={trash.isPending} onClick={() => trash.mutate()}>
+              move to trash
+            </button>
+          )
         ) : confirmPurge ? (
           <>
             <p className="w-full text-danger">&gt; careful: this wish cannot be unwished.</p>
@@ -267,6 +292,8 @@ function Details({ asset, collections, onClose }: { asset: Asset; collections: C
           </>
         )}
       </div>
+
+      {sharing && <ShareDialog target={{ asset_id: asset.id }} name={displayName(asset)} onClose={() => setSharing(false)} />}
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, type Me } from '../api'
 import { bytes } from '../lib/format'
 import { errorText, log, logLines } from '../lib/log'
-import { useCollections, useRefreshLibrary, useStats } from '../lib/queries'
+import { useCollections, useRefreshLibrary, useShared, useStats } from '../lib/queries'
 import { useStore } from '../lib/store'
 import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/theme'
 import { uploadFiles, uploads } from '../lib/uploads'
@@ -29,13 +29,27 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
 
+  const { data: shared } = useShared()
   const collection = params.get('collection')
-  const targetCollection = collection && collection !== 'none' ? collection : null
+  const ownJar = collection && collection !== 'none' ? collection : null
 
-  // New files go into the jar being looked at.
+  // Where new files go. Looking at a jar someone shared: into that jar, if
+  // the share allows adding. Otherwise a member's own library, in the jar
+  // being looked at. A guest anywhere else has nowhere to put files.
+  const sharedJarId = location.pathname.match(/^\/shared\/jar\/([^/]+)/)?.[1] ?? null
+  const sharedRole = shared?.jars.find((j) => j.id === sharedJarId)?.role
+  const canUpload = sharedJarId ? sharedRole === 'edit' : me.member && !location.pathname.startsWith('/shared')
+  const uploadJar = sharedJarId ?? ownJar
+
   const send = useCallback(
-    (files: Iterable<File>) => uploadFiles(files, { collectionId: targetCollection, onStored: refresh }),
-    [targetCollection, refresh],
+    (files: Iterable<File>) => {
+      if (!canUpload) {
+        log('err', 'nothing here you can add files to')
+        return
+      }
+      uploadFiles(files, { collectionId: uploadJar, onStored: refresh })
+    },
+    [canUpload, uploadJar, refresh],
   )
 
   // Drop a file anywhere, or paste a screenshot with Ctrl+V.
@@ -97,15 +111,25 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
 
   const commands = useMemo<Command[]>(
     () => [
-      { id: 'upload', label: 'wish upload', hint: 'pick files', run: () => picker.current?.click() },
-      { id: 'library', label: 'go library', run: () => navigate('/') },
-      ...KINDS.map((k) => ({ id: `kind-${k.id}`, label: `show ${k.label}`, run: () => navigate(`/?kind=${k.id}`) })),
-      { id: 'trash', label: 'go trash', run: () => navigate('/trash') },
+      ...(me.member
+        ? [
+            { id: 'upload', label: 'wish upload', hint: 'pick files', run: () => picker.current?.click() },
+            { id: 'library', label: 'go library', run: () => navigate('/') },
+            ...KINDS.map((k) => ({ id: `kind-${k.id}`, label: `show ${k.label}`, run: () => navigate(`/?kind=${k.id}`) })),
+            { id: 'trash', label: 'go trash', run: () => navigate('/trash') },
+          ]
+        : []),
+      ...(shared?.jars ?? []).map((j) => ({
+        id: `shared-${j.id}`,
+        label: `open ${j.name}`,
+        hint: `shared by ${j.owner}`,
+        run: () => navigate(`/shared/jar/${j.id}`),
+      })),
       { id: 'settings', label: 'go settings', run: () => navigate('/settings') },
       ...THEMES.map((t) => ({ id: `theme-${t.id}`, label: `theme ${t.name.toLowerCase()}`, hint: t.hint, run: () => setTheme(t.id) })),
       { id: 'scanlines', label: 'toggle scanlines', run: () => setScanlines(document.documentElement.dataset.scanlines !== 'on') },
     ],
-    [navigate],
+    [navigate, me.member, shared],
   )
 
   return (
@@ -119,13 +143,15 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
           <Cube size={22} still />
           <h1 className="hidden sm:block">PRISMO CLOUD</h1>
         </Link>
-        <SearchBox key={params.get('q') ?? ''} initial={params.get('q') ?? ''} onSearch={search} />
+        {me.member ? <SearchBox key={params.get('q') ?? ''} initial={params.get('q') ?? ''} onSearch={search} /> : <span className="flex-1" />}
         <button type="button" className="btn hidden sm:inline-flex" onClick={() => setPaletteOpen(true)} title="commands (Ctrl+K)">
           ctrl+k
         </button>
-        <button type="button" className="btn btn-accent" onClick={() => picker.current?.click()}>
-          make a wish
-        </button>
+        {canUpload && (
+          <button type="button" className="btn btn-accent" onClick={() => picker.current?.click()}>
+            make a wish
+          </button>
+        )}
         <input
           ref={picker}
           type="file"
@@ -139,11 +165,11 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
       </header>
 
       <div className="flex min-h-0 flex-1 gap-3 p-3">
-        <Sidebar open={menuOpen} />
+        <Sidebar open={menuOpen} member={me.member} />
         <main className="min-w-0 flex-1">{children}</main>
       </div>
 
-      <StatusBar email={me.user.email} />
+      <StatusBar email={me.user.email} member={me.member} />
       <LogLines />
       <UploadTray />
       {paletteOpen && <Palette commands={commands} onSearch={search} onClose={() => setPaletteOpen(false)} />}
@@ -190,11 +216,12 @@ function NavItem({ to, active, count, children }: { to: string; active: boolean;
   )
 }
 
-function Sidebar({ open }: { open: boolean }) {
+function Sidebar({ open, member }: { open: boolean; member: boolean }) {
   const { pathname } = useLocation()
   const [params] = useSearchParams()
   const { data: collections = [] } = useCollections()
   const { data: stats } = useStats()
+  const { data: shared } = useShared()
   const qc = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
@@ -213,6 +240,8 @@ function Sidebar({ open }: { open: boolean }) {
   const kind = home ? params.get('kind') : null
   const collection = home ? params.get('collection') : null
   const filtered = Boolean(kind || collection || params.get('q') || params.get('tag'))
+  const sharedJars = shared?.jars ?? []
+  const sharedItems = shared?.items.length ?? 0
 
   return (
     <nav
@@ -221,58 +250,82 @@ function Sidebar({ open }: { open: boolean }) {
       }`}
       aria-label="library"
     >
-      <div>
-        <NavItem to="/" active={home && !filtered} count={stats?.assets}>
-          everything
-        </NavItem>
-        {KINDS.map((k) => (
-          <NavItem key={k.id} to={`/?kind=${k.id}`} active={kind === k.id}>
-            {k.label}
-          </NavItem>
-        ))}
-      </div>
+      {/* A guest has no library of their own, only what was shared. */}
+      {member && (
+        <>
+          <div>
+            <NavItem to="/" active={home && !filtered} count={stats?.assets}>
+              everything
+            </NavItem>
+            {KINDS.map((k) => (
+              <NavItem key={k.id} to={`/?kind=${k.id}`} active={kind === k.id}>
+                {k.label}
+              </NavItem>
+            ))}
+          </div>
 
-      <div>
-        <h3 className="dim px-[10px] pb-2">PICKLE JARS</h3>
-        {collections.map((c) => (
-          <NavItem key={c.id} to={`/?collection=${c.id}`} active={collection === c.id} count={c.count}>
-            {c.name}
-          </NavItem>
-        ))}
-        <NavItem to="/?collection=none" active={collection === 'none'}>
-          no jar
-        </NavItem>
-        {adding ? (
-          <form
-            className="px-[10px] pt-3"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (name.trim()) create.mutate(name.trim())
-            }}
-          >
-            <input
-              className="field"
-              autoFocus
-              value={name}
-              maxLength={60}
-              placeholder="jar name"
-              aria-label="new jar name"
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => !name.trim() && setAdding(false)}
-              onKeyDown={(e) => e.key === 'Escape' && setAdding(false)}
-            />
-          </form>
-        ) : (
-          <button type="button" className="nav-item dim" onClick={() => setAdding(true)}>
-            + new jar
-          </button>
-        )}
-      </div>
+          <div>
+            <h3 className="dim px-[10px] pb-2">PICKLE JARS</h3>
+            {collections.map((c) => (
+              <NavItem key={c.id} to={`/?collection=${c.id}`} active={collection === c.id} count={c.count}>
+                {c.name}
+              </NavItem>
+            ))}
+            <NavItem to="/?collection=none" active={collection === 'none'}>
+              no jar
+            </NavItem>
+            {adding ? (
+              <form
+                className="px-[10px] pt-3"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (name.trim()) create.mutate(name.trim())
+                }}
+              >
+                <input
+                  className="field"
+                  autoFocus
+                  value={name}
+                  maxLength={60}
+                  placeholder="jar name"
+                  aria-label="new jar name"
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={() => !name.trim() && setAdding(false)}
+                  onKeyDown={(e) => e.key === 'Escape' && setAdding(false)}
+                />
+              </form>
+            ) : (
+              <button type="button" className="nav-item dim" onClick={() => setAdding(true)}>
+                + new jar
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {(sharedJars.length > 0 || sharedItems > 0 || !member) && (
+        <div>
+          <h3 className="dim px-[10px] pb-2">SHARED WITH ME</h3>
+          {sharedJars.map((j) => (
+            <NavItem key={j.id} to={`/shared/jar/${j.id}`} active={pathname === `/shared/jar/${j.id}`} count={j.count}>
+              {j.name}
+            </NavItem>
+          ))}
+          {sharedItems > 0 && (
+            <NavItem to="/shared/items" active={pathname === '/shared/items'} count={sharedItems}>
+              single items
+            </NavItem>
+          )}
+          {sharedJars.length === 0 && sharedItems === 0 && <p className="dim px-[10px]">nothing yet</p>}
+        </div>
+      )}
 
       <div className="mt-auto">
-        <NavItem to="/trash" active={pathname === '/trash'} count={stats?.trashed || undefined}>
-          trash
-        </NavItem>
+        {member && (
+          <NavItem to="/trash" active={pathname === '/trash'} count={stats?.trashed || undefined}>
+            trash
+          </NavItem>
+        )}
         <NavItem to="/settings" active={pathname === '/settings'}>
           settings
         </NavItem>
@@ -281,7 +334,7 @@ function Sidebar({ open }: { open: boolean }) {
   )
 }
 
-function StatusBar({ email }: { email: string }) {
+function StatusBar({ email, member }: { email: string; member: boolean }) {
   const { data: stats } = useStats()
   const items = useStore(uploads)
   const lines = useStore(logLines)
@@ -307,7 +360,7 @@ function StatusBar({ email }: { email: string }) {
     <footer className="panel px relative z-20 mx-3 mb-3 flex h-[30px] shrink-0 items-center gap-4 overflow-hidden px-2 text-[18px]">
       <BmoFace mood={mood} scale={1.5} />
       <span className="shrink-0">{text}</span>
-      {stats && (
+      {stats && member && (
         <span className="dim hidden truncate sm:inline">
           {stats.assets} items · {bytes(stats.bytes)}
         </span>

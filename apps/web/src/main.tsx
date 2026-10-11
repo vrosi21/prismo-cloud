@@ -7,6 +7,10 @@ import '@fontsource/vt323'
 import './theme.css'
 import { ApiError } from './api'
 import { App } from './App'
+import { captureInvite } from './lib/invite'
+
+// An invitation link carries ?invite=...; keep it before anything navigates.
+captureInvite()
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },

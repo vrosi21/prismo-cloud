@@ -82,9 +82,18 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		fail("invalid", err)
 		return
 	}
+	// Members are listed in ALLOWED_EMAILS. Anyone else gets in only as a
+	// guest, and only while something is shared with their account.
 	if !s.cfg.EmailAllowed(claims.Email) {
-		fail("not_allowed", errors.New(claims.Email+" is not in ALLOWED_EMAILS"))
-		return
+		invited, err := s.store.HasShares(r.Context(), auth.EmailKey(claims.Email))
+		if err != nil {
+			fail("server", err)
+			return
+		}
+		if !invited {
+			fail("not_allowed", errors.New(claims.Email+" is not a member and nothing is shared with it"))
+			return
+		}
 	}
 	if err := s.signIn(w, r, claims.Email, &claims.Subject); err != nil {
 		fail("server", err)
@@ -94,13 +103,37 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 // devLogin signs in without Google. Only reachable when DEV_LOGIN=1, which
-// the configuration accepts on localhost alone.
+// the configuration accepts on localhost alone. An optional email signs in as
+// someone else under the same rule as Google sign-in (member, or invited
+// guest), which is how guest behaviour is tested without a second Google
+// account.
 func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 	if !s.cfg.DevLogin {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	if err := s.signIn(w, r, devEmail, nil); err != nil {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if r.ContentLength != 0 && !decode(w, r, &req) {
+		return
+	}
+	email := strings.TrimSpace(req.Email)
+	if email == "" {
+		email = devEmail
+	}
+	if !s.isMember(email) {
+		invited, err := s.store.HasShares(r.Context(), auth.EmailKey(email))
+		if err != nil {
+			serverError(w, r, err)
+			return
+		}
+		if !invited {
+			writeErr(w, http.StatusForbidden, "that account is not a member and nothing is shared with it")
+			return
+		}
+	}
+	if err := s.signIn(w, r, email, nil); err != nil {
 		serverError(w, r, err)
 		return
 	}
@@ -113,7 +146,8 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request, email string, go
 	if err != nil {
 		return err
 	}
-	if created {
+	// A new member starts with the usual jars. A guest has no library.
+	if created && s.isMember(email) {
 		for _, jar := range []string{"screenshots", "gifs", "stickers"} {
 			if _, err := s.store.CollectionByName(r.Context(), u.ID, jar); err != nil {
 				return err
@@ -149,7 +183,8 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	p := who(r)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user": map[string]string{"id": p.UserID, "email": p.Email},
+		"user":   map[string]string{"id": p.UserID, "email": p.Email},
+		"member": p.Member,
 		"limits": map[string]any{
 			"max_upload_bytes":     s.cfg.MaxUploadBytes,
 			"gif_max_seconds":      s.cfg.GIFMaxSeconds,

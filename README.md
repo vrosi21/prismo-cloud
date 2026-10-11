@@ -49,8 +49,9 @@ node scripts/smoke.mjs
 
 ## Sign-in
 
-There are no passwords. People sign in with Google, and only the accounts listed in
-`ALLOWED_EMAILS` get in.
+There are no passwords. People sign in with Google. Members, the accounts listed in
+`ALLOWED_EMAILS`, have a library. Anyone else gets in only as a guest, while something is
+shared with their account (see Sharing).
 
 The server sends the browser to Google; Google posts back a signed statement of who
 signed in; the server checks the signature against Google's public keys
@@ -63,6 +64,31 @@ In Google Cloud Console, the OAuth client (type "Web application") must list thi
 ```
 https://<your public address>/v1/auth/google/callback
 ```
+
+## Sharing
+
+Two different things, on purpose:
+
+| | By link | With a person |
+|---|---|---|
+| Who gets in | anyone holding the link | one Google account |
+| Set where | item -> "anyone with link": unlisted or public | jar -> "share jar", or item -> "share with a person" |
+| Can do | look and download, nothing else, ever | **view**: look and download. **edit**: also add files to a shared jar, rename, tag, move to trash |
+| Take it back | set the item to private | revoke in the same dialog; works at once |
+
+A link can be forwarded, so a link never allows changing anything. Whoever is to edit
+has to sign in.
+
+Sharing with a person makes them a **guest**: they can sign in with that Google account
+although they are not in `ALLOWED_EMAILS`, see only what was shared with them, and have
+no library of their own. Files a guest adds to a shared jar belong to the jar's owner and
+start private. Only the owner can delete for good, change who has the link, or share
+further. The dialog gives an invitation link to send; opening it shows which account was
+invited, and no other account gets in.
+
+While the Google project behind `GOOGLE_CLIENT_ID` is in "Testing" mode, Google itself
+only lets listed test users through: a guest then also has to be added in Google Cloud
+Console (Google Auth Platform -> Audience -> Test users), or the app published.
 
 ## The live site
 

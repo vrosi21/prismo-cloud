@@ -41,6 +41,10 @@ type uploadOptions struct {
 	Source       string
 	Collection   string  // by name, created when missing
 	CollectionID *string // by id
+
+	// Filled in by resolve.
+	OwnerID string // whose library the file goes into
+	Shared  bool   // true when that is someone else's jar, shared with edit rights
 }
 
 // resolve validates the options and fills in defaults. A non-empty message
@@ -77,6 +81,7 @@ func (s *Server) resolve(ctx context.Context, p *principal, o *uploadOptions) (m
 	} else if !sourceRe.MatchString(o.Source) {
 		return "bad source", nil
 	}
+	o.OwnerID = p.UserID
 	if o.CollectionID != nil {
 		if !isUUID(*o.CollectionID) {
 			return "bad collection id", nil
@@ -86,8 +91,21 @@ func (s *Server) resolve(ctx context.Context, p *principal, o *uploadOptions) (m
 			return "", err
 		}
 		if !ok {
-			return "no such collection", nil
+			// Not the caller's jar. It may be one shared with them for editing:
+			// then the file goes into the jar owner's library, private, and
+			// nothing about how it is shared is the uploader's to choose.
+			role, ownerID, _, err := s.store.CollectionShare(ctx, p.shareKey(), *o.CollectionID)
+			if err != nil {
+				return "", err
+			}
+			if role != store.RoleEdit {
+				return "no such collection", nil
+			}
+			o.OwnerID, o.Shared = ownerID, true
+			o.Visibility, o.Kind, o.Source = "private", "file", "guest"
 		}
+	} else if !p.Member {
+		return "guests can only add files to a jar shared with them", nil
 	} else if name, ok := cleanName(o.Collection); ok {
 		c, err := s.store.CollectionByName(ctx, p.UserID, name)
 		if err != nil {
@@ -106,7 +124,7 @@ func (o uploadOptions) newAsset(p *principal, filename string) store.NewAsset {
 		mime = "application/octet-stream"
 	}
 	return store.NewAsset{
-		OwnerID:      p.UserID,
+		OwnerID:      o.OwnerID,
 		CollectionID: o.CollectionID,
 		Kind:         o.Kind,
 		Title:        o.Title,
@@ -175,7 +193,8 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Same file already in this library: skip the upload entirely.
-	if req.SHA256 != "" {
+	// (Never for a guest: the answer would reveal what else the owner has.)
+	if req.SHA256 != "" && !opts.Shared {
 		existing, err := s.store.AssetByBlob(r.Context(), p.UserID, req.SHA256)
 		if err == nil {
 			writeJSON(w, http.StatusOK, map[string]any{"asset": s.view(existing), "duplicate": true})
@@ -217,12 +236,17 @@ func (s *Server) completeAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := who(r)
-	a, err := s.store.GetAsset(r.Context(), p.UserID, id)
+	// The uploader is the owner, or a guest with edit rights on the jar.
+	a, level, err := s.assetAccess(r.Context(), p, id)
 	if s.assetErr(w, r, err) {
 		return
 	}
+	if level < accessEdit {
+		writeErr(w, http.StatusForbidden, "you can only view this")
+		return
+	}
 	if a.Status != "pending" {
-		writeJSON(w, http.StatusOK, s.view(a)) // already completed: nothing to do
+		writeJSON(w, http.StatusOK, s.viewAs(a, level)) // already completed: nothing to do
 		return
 	}
 	key := blob.StagingKey(a.ID)
@@ -241,12 +265,12 @@ func (s *Server) completeAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a, err = s.startProcessing(r.Context(), func(tx pgx.Tx) (store.Asset, error) {
-		return store.MarkUploaded(r.Context(), tx, p.UserID, id, size)
+		return store.MarkUploaded(r.Context(), tx, a.OwnerID, id, size)
 	})
 	if s.assetErr(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, s.view(a))
+	writeJSON(w, http.StatusOK, s.viewAs(a, level))
 }
 
 // startProcessing runs change and queues the processing job in one
@@ -350,7 +374,7 @@ func (s *Server) uploadDirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	existing, err := s.store.AssetByBlob(r.Context(), p.UserID, sha)
-	if err == nil {
+	if err == nil && !opts.Shared {
 		cleanup()
 		writeJSON(w, http.StatusOK, s.uploadResult(existing, true))
 		return

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
+import { captureInvite, inviteToken } from '../lib/invite'
 import { errorText } from '../lib/log'
 import { Cube, Prismo } from '../components/sprites'
 
@@ -22,13 +23,20 @@ function takeRefusal(): string | null {
   params.delete('auth_error')
   const rest = params.toString()
   window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''))
-  return REFUSALS[code] ?? 'sign-in did not work. try again.'
+  return code
 }
 
 export function Login() {
   const qc = useQueryClient()
   const [refusal] = useState(takeRefusal)
+  const [token] = useState(() => {
+    captureInvite()
+    return inviteToken()
+  })
   const config = useQuery({ queryKey: ['auth-config'], queryFn: api.authConfig, staleTime: Infinity, retry: 1 })
+  // Someone who followed an invitation link: say which account was invited,
+  // because no other account will be let in.
+  const invite = useQuery({ queryKey: ['invite', token], queryFn: () => api.invite(token!), enabled: !!token, retry: false, staleTime: Infinity })
 
   const dev = useMutation({
     mutationFn: api.devLogin,
@@ -36,6 +44,12 @@ export function Login() {
   })
 
   const nothingOffered = config.data && !config.data.google && !config.data.dev
+  const refusalText =
+    refusal === 'not_allowed' && invite.data
+      ? `that google account was not invited. sign in with ${invite.data.email}.`
+      : refusal
+        ? (REFUSALS[refusal] ?? 'sign-in did not work. try again.')
+        : null
 
   return (
     <div className="relative z-10 flex h-full items-center justify-center overflow-y-auto p-4">
@@ -52,9 +66,21 @@ export function Login() {
             </div>
           </div>
 
-          {refusal && (
+          {invite.data && (
+            <div className="px-accent bg-panel-2 p-3">
+              <p>
+                &gt; {invite.data.owner} shared "{invite.data.name}" with you ({invite.data.role === 'edit' ? 'you may edit' : 'view only'}).
+              </p>
+              <p className="mt-2">
+                &gt; only <strong className="break-all">{invite.data.email}</strong> can open it. sign in with that google account.
+              </p>
+            </div>
+          )}
+          {invite.isError && <p className="text-danger">&gt; this invitation does not exist any more.</p>}
+
+          {refusalText && (
             <p className="text-danger" role="alert">
-              &gt; {refusal}
+              &gt; {refusalText}
             </p>
           )}
           {config.isError && (

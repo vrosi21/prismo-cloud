@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"prismocloud/internal/auth"
 )
 
 type S3 struct {
@@ -114,9 +116,11 @@ func Load() (Config, error) {
 
 // EmailAllowed reports whether a Google account may sign in.
 func (c Config) EmailAllowed(email string) bool {
-	email = strings.ToLower(strings.TrimSpace(email))
+	// Compared in normalised form, so the dotted and undotted spelling of a
+	// Gmail address are the same account here, as they are at Google.
+	key := auth.EmailKey(email)
 	for _, allowed := range c.AllowedEmails {
-		if email == allowed {
+		if key != "" && key == auth.EmailKey(allowed) {
 			return true
 		}
 	}
