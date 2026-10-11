@@ -1,0 +1,93 @@
+# The stack as it runs on the server. Put there by deploy/deploy.sh; not used locally
+# (the compose.yaml at the top of the repository is the local one).
+#
+# Differences from local: no web server of its own. HTTPS ends at the Caddy that already
+# owns ports 80 and 443 on the server; the API and the object store join that Caddy's
+# Docker network under the names prismo-api and prismo-s3. The web app itself is served
+# by Cloudflare Pages.
+name: prismo
+
+x-app: &app
+  image: prismo-api:live
+  restart: unless-stopped
+  environment:
+    DATABASE_URL: postgres://prismo:${POSTGRES_PASSWORD:?}@postgres:5432/prismo?sslmode=disable
+    PUBLIC_URL: ${PUBLIC_URL:?}
+    S3_ENDPOINT: http://garage:3900
+    S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:?}
+    S3_REGION: garage
+    S3_BUCKET: prismo
+    S3_ACCESS_KEY: ${S3_ACCESS_KEY:?}
+    S3_SECRET_KEY: ${S3_SECRET_KEY:?}
+    GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+    ORIGIN_SECRET: ${ORIGIN_SECRET:?}
+    MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-500}
+    WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+    TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
+    GIF_MAX_SECONDS: ${GIF_MAX_SECONDS:-30}
+  depends_on:
+    postgres:
+      condition: service_healthy
+    garage:
+      condition: service_started
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prismo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: prismo
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prismo -d prismo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  garage:
+    image: dxflrs/garage:v2.4.1
+    restart: unless-stopped
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?}
+      GARAGE_DEFAULT_ACCESS_KEY: ${S3_ACCESS_KEY}
+      GARAGE_DEFAULT_SECRET_KEY: ${S3_SECRET_KEY}
+      GARAGE_DEFAULT_BUCKET: prismo
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    networks:
+      default:
+      front:
+        aliases: [prismo-s3]
+
+  api:
+    <<: *app
+    command: ["serve"]
+    networks:
+      default:
+      front:
+        aliases: [prismo-api]
+
+  worker:
+    <<: *app
+    command: ["work"]
+    # ffmpeg is the one hungry process here. If it runs away, it is this container that
+    # gets stopped, not a neighbour on the same server.
+    mem_limit: 1g
+
+networks:
+  front:
+    external: true
+    name: ${FRONT_NETWORK:?}
+
+volumes:
+  pgdata:
+  garage-meta:
+  garage-data:

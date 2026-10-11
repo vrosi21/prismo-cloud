@@ -1,0 +1,100 @@
+name: prismo
+
+x-app-env: &app-env
+  DATABASE_URL: postgres://prismo:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/prismo?sslmode=disable
+  PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+  S3_ENDPOINT: http://garage:3900
+  S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:3900}
+  S3_REGION: garage
+  S3_BUCKET: ${S3_BUCKET:-prismo}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+  CORS_ORIGINS: ${CORS_ORIGINS:-}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+  DEV_LOGIN: ${DEV_LOGIN:-}
+  ORIGIN_SECRET: ${ORIGIN_SECRET:-}
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-500}
+  WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+  TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
+  GIF_MAX_SECONDS: ${GIF_MAX_SECONDS:-30}
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prismo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: prismo
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prismo -d prismo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  garage:
+    image: dxflrs/garage:v2.4.1
+    restart: unless-stopped
+    # Single node: layout, bucket and access key are created on first start.
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?set GARAGE_RPC_SECRET in .env}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?set GARAGE_ADMIN_TOKEN in .env}
+      GARAGE_DEFAULT_ACCESS_KEY: ${S3_ACCESS_KEY}
+      GARAGE_DEFAULT_SECRET_KEY: ${S3_SECRET_KEY}
+      GARAGE_DEFAULT_BUCKET: ${S3_BUCKET:-prismo}
+    volumes:
+      - ./infra/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+
+  api:
+    build: ./apps/api
+    restart: unless-stopped
+    command: ["serve"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_started
+
+  worker:
+    build: ./apps/api
+    restart: unless-stopped
+    command: ["work"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_started
+
+  caddy:
+    build:
+      context: .
+      dockerfile: infra/caddy.Dockerfile
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      S3_SITE_ADDRESS: ${S3_SITE_ADDRESS:-:3900}
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+      - "${HTTPS_PORT:-8443}:443"
+      - "${S3_PORT:-3900}:3900"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+      - garage
+
+volumes:
+  pgdata:
+  garage-meta:
+  garage-data:
+  caddy-data:
+  caddy-config:

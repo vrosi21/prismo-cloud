@@ -1,0 +1,20 @@
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	@backend path /v1/* /i/* /s/* /healthz
+	handle @backend {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		root * /srv
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Object storage, reached directly by browsers for presigned uploads.
+{$S3_SITE_ADDRESS::3900} {
+	reverse_proxy garage:3900
+}

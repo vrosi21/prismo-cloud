@@ -1,0 +1,9 @@
+.env
+node_modules/
+dist/
+bin/
+*.exe
+*.log
+.DS_Store
+Thumbs.db
+.wrangler/

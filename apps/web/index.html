@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" data-theme="timeroom">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6d54a" />
+    <title>Prismo Cloud</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // Apply the saved theme before first paint so the page never flashes yellow.
+      try {
+        var t = localStorage.getItem('prismo.theme')
+        if (t) document.documentElement.dataset.theme = t
+        if (localStorage.getItem('prismo.scanlines') === 'on') document.documentElement.dataset.scanlines = 'on'
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
