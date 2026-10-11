@@ -98,7 +98,10 @@ domain_of() {
 }
 domain="$(domain_of)"
 if [[ -z "$domain" ]]; then
-	wrangler pages project create "$project" --production-branch main >/dev/null
+	# --force: newer wrangler versions try to create a Workers project instead and
+	# refuse without it. This setup is a Pages project (a pages.dev address with
+	# _worker.js in front of the files), so ask for exactly that.
+	wrangler pages project create "$project" --production-branch main --force >/dev/null
 	domain="$(domain_of)"
 	echo "    created"
 fi
