@@ -6,7 +6,8 @@
 #   prismo load IMAGE      read a `docker save` stream from standard input, make it live
 #   prismo configured      exit 0 once the public address has been set
 #   prismo up              start or update the containers, wait until the API answers
-#   prismo status          containers and health
+#   prismo front           make the server's front Caddy answer for Prismo's two names
+#   prismo status          containers, health, and whether the front Caddy still knows us
 #   prismo logs [service]  recent log lines
 #   prismo backup          dump the database to backups/, keep the newest 14
 #
@@ -30,6 +31,43 @@ healthy() {
 	# Asked from inside the API container, with the secret, the way Cloudflare asks.
 	compose exec -T api wget -q -O /dev/null --header "X-Origin-Auth: $(setting ORIGIN_SECRET)" \
 		http://localhost:8080/healthz 2>/dev/null
+}
+
+# --- the front door ------------------------------------------------------------
+# Ports 80 and 443 belong to a Caddy that some other project on this server
+# runs. Prismo is reachable only while that Caddy's file holds two blocks: one
+# for the API's name, one for the storage's. The file is not ours, and whoever
+# deploys that other project may write it anew without them. So the blocks can
+# be checked for, and put back, from here.
+
+front_container() {
+	# Whoever publishes port 443, unless FRONT_CONTAINER names it outright.
+	local named
+	named="$(setting FRONT_CONTAINER)"
+	if [[ -n "$named" ]]; then
+		printf '%s\n' "$named"
+	else
+		docker ps --filter publish=443 --format '{{.Names}}' | head -n 1
+	fi
+}
+front_file() {
+	docker inspect "$1" --format \
+		'{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}'
+}
+# The bare name in a setting that holds an address: https://name/path -> name
+name_in() {
+	local url
+	url="$(setting "$1")"
+	url="${url#https://}"
+	printf '%s' "${url%%/*}"
+}
+# Prints the names the front Caddy has no block for. Nothing printed: all is well.
+front_missing() {
+	local file="$1" name
+	for name in "$(name_in ORIGIN_URL)" "$(name_in S3_PUBLIC_ENDPOINT)"; do
+		# A block starts with its name at the beginning of a line.
+		awk -v name="$name" '$1 == name { found = 1 } END { exit !found }' "$file" || printf ' %s' "$name"
+	done
 }
 
 case "${1:-}" in
@@ -97,6 +135,8 @@ up)
 	for _ in $(seq 1 40); do
 		if healthy; then
 			echo "    the API answers"
+			# Running is not the same as reachable: see "the front door" above.
+			[[ -z "$(setting ORIGIN_URL)" ]] || "$0" front
 			exit 0
 		fi
 		sleep 3
@@ -106,9 +146,63 @@ up)
 	exit 1
 	;;
 
+front)
+	[[ -n "$(setting ORIGIN_URL)" && -n "$(setting S3_PUBLIC_ENDPOINT)" ]] ||
+		{ echo "not set yet: ORIGIN_URL and S3_PUBLIC_ENDPOINT (prismo setenv KEY)" >&2; exit 1; }
+	container="$(front_container)"
+	[[ -n "$container" ]] || { echo "no container on this server publishes port 443" >&2; exit 1; }
+	file="$(front_file "$container")"
+	[[ -f "$file" ]] || { echo "could not find the Caddyfile of container '$container'" >&2; exit 1; }
+
+	missing="$(front_missing "$file")"
+	if [[ -z "$missing" ]]; then
+		echo "    front Caddy '$container' answers for both names"
+		exit 0
+	fi
+	backup="$file.bak-$(date +%Y%m%d%H%M%S)"
+	cp "$file" "$backup"
+	# Appended, never rewritten: the container sees this one file through a
+	# mount that is tied to the file itself, and a new file in its place would
+	# stay invisible to it. Whatever else is in there is not touched.
+	for name in $missing; do
+		if [[ "$name" == "$(name_in ORIGIN_URL)" ]]; then
+			about="API. Requests arrive from the Cloudflare Pages proxy; the API ignores
+# anything that does not carry the shared secret."
+			to=prismo-api:8080
+		else
+			about="object storage. Browsers upload here directly, with short-lived URLs
+# that the API signs."
+			to=prismo-s3:3900
+		fi
+		printf '\n# Prismo Cloud %s\n%s {\n\treverse_proxy %s\n}\n' "$about" "$name" "$to" >>"$file"
+	done
+	if ! docker exec "$container" caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+		cat "$backup" >"$file"
+		echo "the added blocks did not validate; $file was put back as it was" >&2
+		exit 1
+	fi
+	# A reload swaps the configuration without dropping a connection, so the
+	# other sites on this Caddy do not notice.
+	docker exec "$container" caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1
+	echo "    front Caddy '$container' had lost:$missing"
+	echo "    put back in $file (as it was before: $backup) and reloaded"
+	;;
+
 status)
 	compose ps --format 'table {{.Service}}\t{{.State}}\t{{.Status}}'
 	healthy && echo "API: answers" || echo "API: does not answer"
+	if [[ -n "$(setting ORIGIN_URL)" ]]; then
+		container="$(front_container)"
+		file="$([[ -n "$container" ]] && front_file "$container" || true)"
+		if [[ ! -f "$file" ]]; then
+			echo "Front door: cannot find the Caddy that owns port 443"
+		elif missing="$(front_missing "$file")" && [[ -n "$missing" ]]; then
+			echo "Front door: CLOSED. '$container' no longer answers for:$missing"
+			echo "            the site shows errors (525) until this is run:  prismo front"
+		else
+			echo "Front door: '$container' answers for both names"
+		fi
+	fi
 	;;
 
 logs)
@@ -125,7 +219,7 @@ backup)
 	;;
 
 *)
-	sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
 	exit 1
 	;;
 esac

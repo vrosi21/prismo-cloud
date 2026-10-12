@@ -41,46 +41,11 @@ cd "$(dirname "$0")/.."
 wrangler() { npx --yes wrangler@4 "$@"; }
 
 echo "==> 1/6 server: answering for ${origin#https://} and ${storage#https://}"
-ssh "$target" 'bash -s' -- "${origin#https://}" "${storage#https://}" <<'REMOTE'
-set -euo pipefail
-api_name="$1"
-s3_name="$2"
-container="$(docker ps --filter publish=443 --format '{{.Names}}' | head -n 1)"
-[[ -n "$container" ]] || { echo "no container on this server publishes port 443" >&2; exit 1; }
-caddyfile="$(docker inspect "$container" --format \
-	'{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}')"
-[[ -f "$caddyfile" ]] || { echo "could not find the Caddyfile of container '$container'" >&2; exit 1; }
-
-if grep -qF "$api_name" "$caddyfile" && grep -qF "$s3_name" "$caddyfile"; then
-	echo "    $caddyfile already mentions both names"
-else
-	backup="$caddyfile.bak-$(date +%Y%m%d%H%M%S)"
-	cp "$caddyfile" "$backup"
-	# Appending keeps the file's identity, which a single-file Docker mount depends on.
-	cat >>"$caddyfile" <<EOF
-
-# Prismo Cloud API. Requests arrive from the Cloudflare Pages proxy; the API ignores
-# anything that does not carry the shared secret.
-$api_name {
-	reverse_proxy prismo-api:8080
-}
-
-# Prismo Cloud object storage. Browsers upload here directly, with short-lived URLs
-# that the API signs.
-$s3_name {
-	reverse_proxy prismo-s3:3900
-}
-EOF
-	if ! docker exec "$container" caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
-		cat "$backup" >"$caddyfile"
-		echo "the new blocks did not validate; $caddyfile was put back as it was" >&2
-		exit 1
-	fi
-	echo "    added two blocks to $caddyfile (previous version: $backup)"
-fi
-docker exec "$container" caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1
-echo "    reloaded '$container'"
-REMOTE
+# The server keeps both addresses: it needs them to check, later, that the Caddy
+# still answers for them (`prismo front`, `prismo status`).
+printf '%s\n' "$origin" | ssh "$target" 'prismo-cloud/bin/prismo setenv ORIGIN_URL' >/dev/null
+printf '%s\n' "$storage" | ssh "$target" 'prismo-cloud/bin/prismo setenv S3_PUBLIC_ENDPOINT' >/dev/null
+ssh "$target" 'prismo-cloud/bin/prismo front'
 
 echo "==> 2/6 signing in to Cloudflare"
 # `whoami` exits 0 either way, so go by what it says.
@@ -124,7 +89,6 @@ echo "    stored"
 
 echo "==> 5/6 server: public address"
 printf '%s\n' "$public" | ssh "$target" 'prismo-cloud/bin/prismo setenv PUBLIC_URL' >/dev/null
-printf '%s\n' "$storage" | ssh "$target" 'prismo-cloud/bin/prismo setenv S3_PUBLIC_ENDPOINT' >/dev/null
 ssh "$target" 'prismo-cloud/bin/prismo up'
 
 echo "    waiting for the certificates"

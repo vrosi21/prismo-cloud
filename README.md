@@ -175,7 +175,21 @@ echo "you@gmail.com"                          | ssh <server> prismo-cloud/bin/pr
 ssh <server> prismo-cloud/bin/prismo up
 ```
 
-On the server, `~/prismo-cloud/bin/prismo` does the rest: `status`, `logs`, `backup`.
+On the server, `~/prismo-cloud/bin/prismo` does the rest: `status`, `logs`, `backup`, `front`.
+
+**The site shows error 525, or uploads fail, while `status` says every container runs.**
+The front door is shut. The Caddy on ports 80 and 443 belongs to another project on the
+server; Prismo is two blocks in that Caddy's file. When that project is deployed with a
+file that does not have them, Prismo keeps running and nobody can reach it.
+`prismo status` says so ("Front door: CLOSED"), and this puts the blocks back without
+touching anything else in the file:
+
+```bash
+ssh <server> prismo-cloud/bin/prismo front
+```
+
+Every `deploy.sh` run does the same check. To stop it from happening at all, the other
+project's own Caddyfile has to carry the two blocks.
 `backup` dumps the database to `~/prismo-cloud/backups/` and keeps the newest fourteen.
 Uploaded files are in the Docker volume `prismo_garage-data` and are **not** in that dump.
 
