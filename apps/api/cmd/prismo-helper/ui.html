@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en" data-theme="{{THEME}}">
+<head>
+<meta charset="utf-8">
+<title>Prismo Cloud</title>
+<!--
+  The picker's page. It is shown by the helper (picker_windows.go) inside its
+  own small window, and it has no network: everything it knows it asks the
+  helper for, through call() below. The helper fills in the {{...}} parts.
+-->
+<style>
+@font-face {
+  font-family: "VT323";
+  src: url(data:font/woff2;base64,{{FONT}}) format("woff2");
+}
+
+/* The same three looks as the web app (apps/web/src/theme.css). */
+:root {
+  --px: 3px;
+  --bg-deep: #e6bb28;
+  --panel: #fff1b0;
+  --panel-2: #ffe27a;
+  --ink: #2a1a3e;
+  --ink-dim: #6b4a12;
+  --line: #2a1a3e;
+  --accent: #f48fb1;
+  --accent-deep: #d9608c;
+  --danger: #b3261e;
+}
+[data-theme="multiverse"] {
+  --bg-deep: #0a0720;
+  --panel: #1f1747;
+  --panel-2: #2b2163;
+  --ink: #f1eaff;
+  --ink-dim: #a99cd6;
+  --line: #9484e6;
+  --danger: #ff7a72;
+}
+[data-theme="bmo"] {
+  --bg-deep: #a3dcb5;
+  --panel: #d9f7df;
+  --panel-2: #c4efce;
+  --ink: #0f3d2e;
+  --ink-dim: #2f6652;
+  --line: #0f3d2e;
+  --accent: #1c7a63;
+  --accent-deep: #145c4a;
+  --danger: #a3341f;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: var(--px) solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-family: "VT323", Consolas, monospace;
+  font-size: 21px;
+  line-height: 1.15;
+  -webkit-font-smoothing: none;
+  user-select: none;
+  cursor: default;
+}
+
+.ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: var(--px) solid var(--line);
+  background: var(--bg-deep);
+}
+.ask span { color: var(--accent-deep); }
+.ask input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  caret-color: var(--accent-deep);
+  caret-shape: block;
+}
+.ask input::placeholder { color: var(--ink-dim); }
+
+.tabs { display: flex; gap: 8px; padding: 8px 12px 0; }
+.tabs button {
+  padding: 1px 8px;
+  border: 0;
+  background: var(--panel-2);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--panel); }
+
+.grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  scrollbar-color: var(--line) var(--bg-deep);
+  scrollbar-width: thin;
+}
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: var(--panel-2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  outline: var(--px) solid transparent;
+}
+.tile:hover { outline-color: var(--ink-dim); }
+.tile[aria-selected="true"] { outline-color: var(--accent-deep); background: var(--ink); color: var(--panel); }
+.tile .look { aspect-ratio: 1; width: 100%; background: var(--bg-deep); }
+.tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Shows through wherever a sticker is see-through. */
+.tile.sticker .look {
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #c9c9c9 25%, transparent 25%, transparent 75%, #c9c9c9 75%),
+    linear-gradient(45deg, #c9c9c9 25%, transparent 25%, transparent 75%, #c9c9c9 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+.tile.sticker img { object-fit: contain; }
+.tile .name { padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; }
+.tile .moves {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 0 5px;
+  background: var(--ink);
+  color: var(--panel);
+  font-size: 16px;
+}
+
+.foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 12px;
+  border-top: var(--px) solid var(--line);
+  background: var(--bg-deep);
+  color: var(--ink-dim);
+  font-size: 18px;
+  white-space: nowrap;
+}
+#says { overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+#says.bad { color: var(--danger); white-space: normal; }
+</style>
+</head>
+<body>
+<label class="ask">
+  <span aria-hidden="true">prismo&gt;</span>
+  <input id="box" placeholder="type to find, enter to paste" autocomplete="off" spellcheck="false" aria-label="find">
+</label>
+<div class="tabs" id="tabs" role="tablist"></div>
+<div class="grid" id="grid" role="listbox" aria-label="what can be pasted"></div>
+<div class="foot">
+  <span id="says" aria-live="polite"></span>
+  <span>enter paste · tab next list · esc close · {{HOTKEY}}</span>
+</div>
+
+<script>
+const TABS = [
+  { kind: 'sticker', name: 'stickers', none: 'no stickers yet. in prismo: open a picture, press "make sticker".' },
+  { kind: 'gif', name: 'gifs', none: 'no gifs yet.' },
+  { kind: 'image', name: 'pictures', none: 'no pictures yet.' },
+  { kind: '', name: 'everything', none: 'nothing in the cloud yet.' },
+]
+
+const box = document.getElementById('box')
+const tabs = document.getElementById('tabs')
+const grid = document.getElementById('grid')
+const says = document.getElementById('says')
+
+// --- talking to the helper ---------------------------------------------------
+// call() posts a question; the helper answers by running answered() here.
+
+const waiting = new Map()
+let asked = 0
+
+function call(method, ...params) {
+  return new Promise((resolve, reject) => {
+    const id = ++asked
+    waiting.set(id, { resolve, reject })
+    window.chrome.webview.postMessage(JSON.stringify({ id, method, params }))
+  })
+}
+
+window.answered = (reply) => {
+  const who = waiting.get(reply.id)
+  if (!who) return
+  waiting.delete(reply.id)
+  if (reply.ok) who.resolve(reply.value)
+  else who.reject(new Error(reply.error))
+}
+
+// --- what is on screen ---------------------------------------------------------
+
+let tab = 0
+let items = []
+let chosen = 0
+let latest = 0 // the newest list that was asked for; older answers are dropped
+let busy = false
+const previews = new Map() // item id -> picture, so a list drawn again does not ask again
+
+function say(text, bad = false) {
+  says.textContent = text
+  says.className = bad ? 'bad' : ''
+}
+
+function drawTabs() {
+  tabs.replaceChildren(
+    ...TABS.map((t, i) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.role = 'tab'
+      b.textContent = t.name
+      b.ariaSelected = String(i === tab)
+      b.tabIndex = -1
+      b.onclick = () => openTab(i)
+      return b
+    }),
+  )
+}
+
+function drawGrid() {
+  grid.replaceChildren(
+    ...items.map((item, i) => {
+      const tile = document.createElement('button')
+      tile.type = 'button'
+      tile.role = 'option'
+      tile.className = 'tile ' + item.kind
+      tile.tabIndex = -1
+      tile.title = item.name
+      tile.onclick = () => pick(i)
+
+      const look = document.createElement('div')
+      look.className = 'look'
+      const img = document.createElement('img')
+      img.alt = ''
+      img.hidden = true
+      look.append(img)
+      const show = (src) => {
+        img.src = src
+        img.hidden = false
+      }
+      if (previews.has(item.id)) show(previews.get(item.id))
+      else {
+        call('thumb', item.id)
+          .then((src) => {
+            previews.set(item.id, src)
+            show(src)
+          })
+          .catch(() => {}) // no preview: the name has to do
+      }
+
+      const name = document.createElement('span')
+      name.className = 'name'
+      name.textContent = item.name
+      tile.append(look, name)
+
+      if (item.kind === 'gif' || item.kind === 'video') {
+        const moves = document.createElement('span')
+        moves.className = 'moves'
+        moves.textContent = 'gif'
+        tile.append(moves)
+      }
+      return tile
+    }),
+  )
+  choose(0)
+}
+
+function choose(i) {
+  chosen = Math.max(0, Math.min(items.length - 1, i))
+  ;[...grid.children].forEach((tile, n) => {
+    tile.ariaSelected = String(n === chosen)
+    if (n === chosen) tile.scrollIntoView({ block: 'nearest' })
+  })
+}
+
+// How many tiles the first row holds: what "one row down" means.
+function columns() {
+  const tiles = [...grid.children]
+  const first = tiles.findIndex((t) => t.offsetTop !== tiles[0].offsetTop)
+  return first < 0 ? Math.max(1, tiles.length) : first
+}
+
+async function load() {
+  const mine = ++latest
+  const text = box.value.trim()
+  say('looking...')
+  try {
+    const found = await call('search', text, TABS[tab].kind)
+    if (mine !== latest) return
+    items = found
+    drawGrid()
+    say(items.length ? `${items.length} found` : text ? 'nothing by that name.' : TABS[tab].none)
+  } catch (e) {
+    if (mine !== latest) return
+    items = []
+    drawGrid()
+    say(e.message, true)
+  }
+}
+
+// The list that is being fetched right now; done once it is on screen.
+let loading = Promise.resolve()
+
+function refresh() {
+  loading = load()
+  return loading
+}
+
+function openTab(i) {
+  tab = (i + TABS.length) % TABS.length
+  drawTabs()
+  refresh()
+}
+
+async function pick(i) {
+  const item = items[i]
+  if (!item || busy) return
+  busy = true
+  choose(i)
+  say(`getting ${item.name}...`)
+  try {
+    // When this comes back the picker is already gone and the paste on its way.
+    await call('pick', item.id)
+    say('')
+  } catch (e) {
+    say(e.message, true)
+  } finally {
+    busy = false
+  }
+}
+
+// The helper runs this every time it brings the picker up.
+window.opened = () => {
+  box.value = ''
+  enterDown = false
+  box.focus()
+  refresh()
+}
+
+// --- keys ------------------------------------------------------------------------
+
+// A short pause in typing starts the search, not every single letter.
+let typing = 0
+box.addEventListener('input', () => {
+  clearTimeout(typing)
+  typing = setTimeout(() => {
+    typing = 0
+    refresh()
+  }, 160)
+})
+// The box keeps the keyboard, whatever is clicked.
+box.addEventListener('blur', () => setTimeout(() => box.focus()))
+
+// Enter pastes when it is let go, not when it goes down: the paste lands in
+// another window, and a key still held would keep typing Enter into it.
+let enterDown = false
+
+document.addEventListener('keydown', (e) => {
+  const moves = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: columns(), ArrowUp: -columns() }
+  if (e.key in moves) {
+    e.preventDefault()
+    choose(chosen + moves[e.key])
+  } else if (e.key === 'Tab') {
+    e.preventDefault()
+    openTab(tab + (e.shiftKey ? -1 : 1))
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    enterDown = true
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    call('close')
+  }
+})
+
+document.addEventListener('keyup', (e) => {
+  if (e.key !== 'Enter' || !enterDown) return
+  enterDown = false
+  // Typing "cat" and Enter in one breath must paste a cat, not whatever was
+  // on screen before: look up what was typed first, then take the top one.
+  if (typing) {
+    clearTimeout(typing)
+    typing = 0
+    refresh()
+  }
+  loading.then(() => pick(chosen))
+})
+
+drawTabs()
+</script>
+</body>
+</html>

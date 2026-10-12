@@ -10,7 +10,7 @@ import (
 const (
 	accessNone  = iota
 	accessView  // look at it and download it
-	accessEdit  // also rename, tag, move to trash; add files to a shared jar
+	accessEdit  // also rename, tag, move to trash; add files to a shared folder
 	accessOwner // everything, including who else gets in
 )
 
@@ -18,7 +18,7 @@ var accessName = [...]string{"", store.RoleView, store.RoleEdit, "owner"}
 
 // assetAccess loads an asset and works out what the caller may do with it:
 // everything if they own it, otherwise whatever a share on the asset or on
-// its jar grants. "Does not exist" and "not yours to see" come back as the
+// its folder grants. "Does not exist" and "not yours to see" come back as the
 // same error, so an id tells a stranger nothing.
 func (s *Server) assetAccess(ctx context.Context, p *principal, id string) (store.Asset, int, error) {
 	a, err := s.store.AssetWithVariants(ctx, id)

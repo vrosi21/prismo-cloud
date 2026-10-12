@@ -119,7 +119,7 @@ func (s *Server) listAssets(w http.ResponseWriter, r *http.Request) {
 const maxSelectAll = 5000
 
 // writeAssetPage finishes a filter from the query string (kind, tag, search,
-// cursor, limit), runs it and writes one page. Whose assets and which jar are
+// cursor, limit), runs it and writes one page. Whose assets and which folder are
 // decided by the caller, never by the query string.
 func (s *Server) writeAssetPage(w http.ResponseWriter, r *http.Request, f store.AssetFilter, level int, extra map[string]any) {
 	q := r.URL.Query()
@@ -231,7 +231,7 @@ func (s *Server) updateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Someone with edit rights may rename and tag. Who can see the item,
-	// what it is and which jar it sits in stay the owner's decisions.
+	// what it is and which folder it sits in stay the owner's decisions.
 	if level < accessOwner && (req.Visibility != nil || req.Kind != nil || req.CollectionID.Set) {
 		writeErr(w, http.StatusForbidden, "only the owner can change that")
 		return

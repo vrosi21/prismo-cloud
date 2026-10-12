@@ -146,7 +146,7 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request, email string, go
 	if err != nil {
 		return err
 	}
-	// A new member starts with the usual jars. A guest has no library.
+	// A new member starts with the usual folders. A guest has no library.
 	if created && s.isMember(email) {
 		for _, folder := range []string{"screenshots", "stickers"} {
 			if _, err := s.store.CollectionByPath(r.Context(), u.ID, folder); err != nil {

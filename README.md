@@ -8,12 +8,14 @@ Prismo's Time Room.
 
 ```
 apps/api      Go. One binary: `prismo serve` (HTTP API) and `prismo work` (ffmpeg jobs).
-              cmd/prismo-watch is the Windows folder watcher.
+              cmd/prismo-helper is the desktop helper for Windows, cmd/prismo-watch
+              the plain folder watcher.
 apps/web      React + Vite single-page app.
 infra         Caddy and Garage configuration for running locally.
 compose.yaml  The whole stack on your own machine: Caddy, API, worker, Postgres, Garage.
 deploy        How it runs for real: server stack, deploy and Cloudflare scripts.
-scripts       smoke.mjs, an end-to-end test of a running stack.
+scripts       smoke.mjs, an end-to-end test of a running stack; building and
+              installing the desktop helper.
 ```
 
 How a file travels:
@@ -79,6 +81,24 @@ across all folders.
   or kept and moved up one level; the app asks which.
 - A picture put into a folder called "stickers" becomes a sticker.
 - A capture program can name a folder by path (`screenshots/2026`); missing folders are made.
+- Search looks in titles, file names and tags.
+
+## Stickers
+
+Open a picture and press **make sticker**. The original is never changed; the result is
+saved as a new, private file in "stickers".
+
+- **crop**: drag a box, press "crop to box".
+- **erase colour**: click a colour and it is erased as far as it reaches from there;
+  "erase background" does that from the edges inward, for a picture on a plain background.
+  The blended pixels along the edge are taken apart too, so no pale rim is left.
+- **rub out**: by hand, for what is left.
+- **smart cut-out**: finds the subject by itself, for photos. A small neural network
+  (U2-Net p, 4.4 MB, [notice](apps/web/public/models/NOTICE.txt)) does it in the browser:
+  the picture is sent nowhere, and both the network and its runtime are served by the
+  site itself, fetched only when somebody asks for a cut-out.
+
+Give the sticker a name: that is what you type to find it again, here and in the picker.
 
 ## Sharing
 
@@ -160,23 +180,65 @@ the web app go straight to the storage name and are only capped by `MAX_UPLOAD_M
 
 ## Capture
 
-Settings -> capture clients -> create a token. Then either:
+Settings -> programs that upload for you -> create a token. A token may:
 
-- **ShareX**: download the config offered right after creating the token and
-  double-click it. Every capture uploads and its link goes to the clipboard.
-  Make one config per folder and bind each to its own hotkey.
-- **Folder watcher**: uploads whatever appears in a folder, by default
-  `Pictures\Screenshots` (Win+PrtScn, Snipping Tool).
+| | add files | look | change, delete |
+|---|---|---|---|
+| **add files** | yes | | |
+| **add files and look** | yes | yes | |
+| **do everything** | yes | yes | yes |
 
-  ```bash
-  cd apps/api && GOOS=windows go build -o prismo-watch.exe ./cmd/prismo-watch
-  ```
+A leaked "add files" token cannot read anything. "New files" on a token decides what
+happens to what it sends: private (the default), or openable by whoever has the link.
 
-  ```
-  prismo-watch.exe -url https://cloud.example.com -token prismo_...
-  ```
+### Desktop helper (Windows)
 
-Tokens made for capture are upload-only: a leaked one cannot read or delete.
+One small program in the background, [cmd/prismo-helper](apps/api/cmd/prismo-helper).
+Its token has to be one that may add files and look.
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\build-helper.ps1
+powershell -ExecutionPolicy Bypass -File scripts\install-helper.ps1 -Url https://<your site> -Token prismo_...
+```
+
+The web app hands you the second line ready to paste, right after creating the token.
+Building needs Docker, nothing else. What the helper does:
+
+- **Uploads every capture.** It watches the folder Windows saves screenshots to and the
+  one ShareX saves to, subfolders included. Nothing is lost while the PC is offline: it
+  carries on from where it stopped.
+- **Leaves the link behind the capture.** After the upload, Ctrl+V still pastes the
+  picture, and the clipboard history (Win+V) has its link one step back. If you copied
+  something else in the meantime, the clipboard is left alone. `-NoLink` switches this off.
+- **Picker.** Press Win+Shift+G anywhere: type a few letters, Enter, and the sticker or
+  GIF is pasted into the window you were in. Tab goes through stickers, GIFs, pictures,
+  everything; Esc closes. A picture is pasted as a picture (with its see-through parts),
+  a GIF as a file, because that is the only way it keeps moving. `-Hotkey ctrl+f9`
+  picks another key, `-Hotkey off` none.
+
+With the helper uploading, ShareX should only capture: in its "After capture tasks"
+leave "Copy image to clipboard" and "Save image to file" on, and switch "Upload image to
+host" off. Otherwise both upload (the cloud keeps one copy, but ShareX then puts its
+link on the clipboard instead of the picture).
+
+`scripts\install-helper.ps1 -Remove` takes it off the PC again.
+
+### ShareX alone
+
+Download the config offered right after creating a token and double-click it. Every
+capture uploads; what lands on the clipboard afterwards is ShareX's choice ("After
+upload tasks": "Copy URL to clipboard" on or off). Make one config per folder and bind
+each to its own hotkey. A token that may only add files is enough.
+
+### Folder watcher
+
+Uploads whatever appears in a folder and does nothing else. It has no window and runs
+on any system; on Windows the helper does the same and more.
+
+```bash
+cd apps/api && go build -o prismo-watch ./cmd/prismo-watch
+./prismo-watch -url https://cloud.example.com -token prismo_... -dir ~/Pictures/Screenshots
+```
 
 ## Work on the UI without the backend
 

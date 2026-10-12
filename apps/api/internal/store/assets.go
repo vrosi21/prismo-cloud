@@ -188,7 +188,9 @@ func (f AssetFilter) where() (conds []string, args []any) {
 		add("a.tags @> array[$%d]::text[]", f.Tag)
 	}
 	if f.Query != "" {
-		add("(a.title ilike $%[1]d or a.filename ilike $%[1]d)", "%"+escapeLike(f.Query)+"%")
+		// What was typed may be part of the title, of the file name or of a tag.
+		add(`(a.title ilike $%[1]d or a.filename ilike $%[1]d
+			or exists (select 1 from unnest(a.tags) tag where tag ilike $%[1]d))`, "%"+escapeLike(f.Query)+"%")
 	}
 	return conds, args
 }

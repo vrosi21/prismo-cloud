@@ -84,6 +84,9 @@ export function StickerMaker({ asset, onClose }: Props) {
   const [tolerance, setTolerance] = useState(28)
   const [brush, setBrush] = useState(26)
   const [keepSize, setKeepSize] = useState(false)
+  // A sticker is found again by its name: in the search here, and in the
+  // picker of the desktop helper.
+  const [name, setName] = useState(() => displayName(asset).replace(/\.[a-z0-9]+$/i, ''))
 
   const paper = useCallback(() => {
     const canvas = canvasRef.current!
@@ -183,6 +186,8 @@ export function StickerMaker({ asset, onClose }: Props) {
         if (touched) log('info', 'not saved yet. "x" throws it away')
         else onClose()
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        // In the name field Ctrl+Z belongs to the typing, not to the picture.
+        if (e.target instanceof HTMLInputElement && e.target.type === 'text') return
         e.preventDefault()
         stepBack()
       }
@@ -308,8 +313,8 @@ export function StickerMaker({ asset, onClose }: Props) {
         log('err', 'this browser could not write the sticker')
         return
       }
-      const name = `${displayName(asset).replace(/\.[a-z0-9]+$/i, '')}-sticker.png`
-      uploadFiles([new File([png], name, { type: 'image/png' })], { collectionPath: 'stickers', kind: 'sticker', onStored: refresh })
+      const filename = `${name.replace(/[\\/]/g, ' ').trim() || 'sticker'}.png`
+      uploadFiles([new File([png], filename, { type: 'image/png' })], { collectionPath: 'stickers', kind: 'sticker', onStored: refresh })
       log('ok', 'sticker is on its way to "stickers"')
       onClose()
     } finally {
@@ -363,83 +368,90 @@ export function StickerMaker({ asset, onClose }: Props) {
           )}
         </div>
 
-        <div className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto p-5 md:w-[380px]">
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="uppercase">make a sticker</h2>
-            <button type="button" className="btn btn-sm" onClick={onClose} aria-label="close without saving">
-              x
-            </button>
-          </div>
-          <p className="dim text-[18px] leading-tight">
-            &gt; from {displayName(asset)}. the original stays as it is.
-            <br />
-            &gt; now {size.w}x{size.h}
-          </p>
-
-          <div className="flex flex-wrap gap-x-3 gap-y-4">
-            {TOOLS.map((t) => (
-              <button key={t.id} type="button" className="btn" aria-pressed={tool === t.id} onClick={() => setTool(t.id)}>
-                {t.name}
-              </button>
-            ))}
-          </div>
-          <p className="dim text-[18px] leading-tight">&gt; {hint}</p>
-
-          {tool === 'crop' && (
-            <div>
-              <button type="button" className="btn" disabled={!box || busy !== null} onClick={crop}>
-                crop to box
+        {/* The tools scroll when the window is low; the name and "save" below them always stay in sight. */}
+        <div className="flex min-h-0 w-full shrink-0 flex-col md:w-[380px]">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="uppercase">make a sticker</h2>
+              <button type="button" className="btn btn-sm" onClick={onClose} aria-label="close without saving">
+                x
               </button>
             </div>
-          )}
-          {tool === 'colour' && (
-            <>
-              <label>
-                <span className="label">how alike a colour must be: {tolerance}</span>
-                <input
-                  type="range"
-                  className="w-full accent-[var(--accent-deep)]"
-                  min={1}
-                  max={120}
-                  value={tolerance}
-                  onChange={(e) => setTolerance(Number(e.target.value))}
-                />
-              </label>
+            <p className="dim text-[18px] leading-tight">
+              &gt; from {displayName(asset)}. the original stays as it is.
+              <br />
+              &gt; now {size.w}x{size.h}
+            </p>
+
+            <div className="flex flex-wrap gap-x-3 gap-y-4">
+              {TOOLS.map((t) => (
+                <button key={t.id} type="button" className="btn" aria-pressed={tool === t.id} onClick={() => setTool(t.id)}>
+                  {t.name}
+                </button>
+              ))}
+            </div>
+            <p className="dim text-[18px] leading-tight">&gt; {hint}</p>
+
+            {tool === 'crop' && (
               <div>
-                <button type="button" className="btn" disabled={busy !== null} onClick={eraseBackground} title="erases the colour the edge of the picture has">
-                  erase background
+                <button type="button" className="btn" disabled={!box || busy !== null} onClick={crop}>
+                  crop to box
                 </button>
               </div>
-            </>
-          )}
-          {tool === 'rub' && (
-            <label>
-              <span className="label">brush size: {brush}</span>
-              <input type="range" className="w-full accent-[var(--accent-deep)]" min={4} max={120} value={brush} onChange={(e) => setBrush(Number(e.target.value))} />
-            </label>
-          )}
+            )}
+            {tool === 'colour' && (
+              <>
+                <label>
+                  <span className="label">how alike a colour must be: {tolerance}</span>
+                  <input
+                    type="range"
+                    className="w-full accent-[var(--accent-deep)]"
+                    min={1}
+                    max={120}
+                    value={tolerance}
+                    onChange={(e) => setTolerance(Number(e.target.value))}
+                  />
+                </label>
+                <div>
+                  <button type="button" className="btn" disabled={busy !== null} onClick={eraseBackground} title="erases the colour the edge of the picture has">
+                    erase background
+                  </button>
+                </div>
+              </>
+            )}
+            {tool === 'rub' && (
+              <label>
+                <span className="label">brush size: {brush}</span>
+                <input type="range" className="w-full accent-[var(--accent-deep)]" min={4} max={120} value={brush} onChange={(e) => setBrush(Number(e.target.value))} />
+              </label>
+            )}
 
-          <div className="flex flex-col gap-2 bg-panel-2 p-3">
-            <div>
-              <button type="button" className="btn" disabled={busy !== null} onClick={cutOut}>
-                smart cut-out
+            <div className="flex flex-col gap-2 bg-panel-2 p-3">
+              <div>
+                <button type="button" className="btn" disabled={busy !== null} onClick={cutOut}>
+                  smart cut-out
+                </button>
+              </div>
+              <p className="dim text-[17px] leading-tight">
+                &gt; finds the subject by itself. best on photos: people, pets, things. it runs here in the browser: the picture goes nowhere.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-x-3 gap-y-4">
+              <button type="button" className="btn" disabled={!touched || busy !== null} onClick={stepBack} title="ctrl+z">
+                undo
+              </button>
+              <button type="button" className="btn" disabled={!touched || busy !== null} onClick={startOver}>
+                start over
               </button>
             </div>
-            <p className="dim text-[17px] leading-tight">
-              &gt; finds the subject by itself. best on photos: people, pets, things. it runs here in the browser: the picture goes nowhere.
-            </p>
           </div>
 
-          <div className="flex flex-wrap gap-x-3 gap-y-4">
-            <button type="button" className="btn" disabled={!touched || busy !== null} onClick={stepBack} title="ctrl+z">
-              undo
-            </button>
-            <button type="button" className="btn" disabled={!touched || busy !== null} onClick={startOver}>
-              start over
-            </button>
-          </div>
-
-          <div className="mt-auto flex flex-col gap-4 pt-3">
+          <div className="flex flex-col gap-4 border-t-[3px] border-line p-5">
+            <label>
+              <span className="label">name: what you type to find it</span>
+              <input className="field" value={name} maxLength={80} placeholder="happy cat" onChange={(e) => setName(e.target.value)} />
+            </label>
             <label className="flex cursor-pointer items-center gap-3">
               <input type="checkbox" className="h-4 w-4 accent-[var(--accent-deep)]" checked={keepSize} onChange={(e) => setKeepSize(e.target.checked)} />
               <span>keep full size (otherwise {STICKER_SIDE} px, as chats show stickers)</span>

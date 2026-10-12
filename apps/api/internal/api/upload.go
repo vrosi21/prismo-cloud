@@ -44,7 +44,7 @@ type uploadOptions struct {
 
 	// Filled in by resolve.
 	OwnerID string // whose library the file goes into
-	Shared  bool   // true when that is someone else's jar, shared with edit rights
+	Shared  bool   // true when that is someone else's folder, shared with edit rights
 }
 
 // resolve validates the options and fills in defaults. A non-empty message
@@ -91,8 +91,8 @@ func (s *Server) resolve(ctx context.Context, p *principal, o *uploadOptions) (m
 			return "", err
 		}
 		if !ok {
-			// Not the caller's jar. It may be one shared with them for editing:
-			// then the file goes into the jar owner's library, private, and
+			// Not the caller's folder. It may be one shared with them for editing:
+			// then the file goes into the folder owner's library, private, and
 			// nothing about how it is shared is the uploader's to choose.
 			access, err := s.store.FolderAccess(ctx, p.shareKey(), *o.CollectionID)
 			if err != nil {
@@ -238,7 +238,7 @@ func (s *Server) completeAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := who(r)
-	// The uploader is the owner, or a guest with edit rights on the jar.
+	// The uploader is the owner, or a guest with edit rights on the folder.
 	a, level, err := s.assetAccess(r.Context(), p, id)
 	if s.assetErr(w, r, err) {
 		return

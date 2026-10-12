@@ -31,7 +31,7 @@ func scanShare(row pgx.Row) (Share, error) {
 	return sh, notFound(err)
 }
 
-// ShareCollection gives an account access to a jar. Sharing again with the
+// ShareCollection gives an account access to a folder. Sharing again with the
 // same account changes the role and keeps the existing invitation link.
 func (s *Store) ShareCollection(ctx context.Context, ownerID, collectionID, email, emailKey, role, invite string) (Share, error) {
 	return scanShare(s.Pool.QueryRow(ctx,
@@ -49,7 +49,7 @@ func (s *Store) ShareAsset(ctx context.Context, ownerID, assetID, email, emailKe
 		 returning `+shareCols, ownerID, assetID, email, emailKey, role, invite))
 }
 
-// ListShares returns who a jar or an item of this owner is shared with.
+// ListShares returns who a folder or an item of this owner is shared with.
 func (s *Store) ListShares(ctx context.Context, ownerID string, collectionID, assetID *string) ([]Share, error) {
 	rows, err := s.Pool.Query(ctx,
 		`select `+shareCols+` from shares
@@ -219,7 +219,7 @@ func (s *Store) SharedFolders(ctx context.Context, email string) ([]SharedFolder
 	return out, rows.Err()
 }
 
-// SharedAsset is an item shared on its own (not through a jar).
+// SharedAsset is an item shared on its own (not through a folder).
 type SharedAsset struct {
 	Asset
 	Role  string

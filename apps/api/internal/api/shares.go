@@ -12,7 +12,7 @@ import (
 	"prismocloud/internal/store"
 )
 
-// Sharing with a specific person. The owner picks a jar or an item, a Google
+// Sharing with a specific person. The owner picks a folder or an item, a Google
 // account and a role; that account can then sign in and reach exactly that.
 //
 // Sharing by link is a different thing (an asset's visibility) and stays
@@ -47,7 +47,7 @@ func (s *Server) listShares(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	collectionID, assetID, ok := shareTarget(q.Get("collection"), q.Get("asset"))
 	if !ok {
-		writeErr(w, http.StatusBadRequest, "name one jar (collection=) or one item (asset=)")
+		writeErr(w, http.StatusBadRequest, "name one folder (collection=) or one item (asset=)")
 		return
 	}
 	shares, err := s.store.ListShares(r.Context(), who(r).UserID, collectionID, assetID)
@@ -75,7 +75,7 @@ func (s *Server) createShare(w http.ResponseWriter, r *http.Request) {
 	p := who(r)
 	collectionID, assetID, ok := shareTarget(req.CollectionID, req.AssetID)
 	if !ok {
-		writeErr(w, http.StatusBadRequest, "name one jar (collection_id) or one item (asset_id)")
+		writeErr(w, http.StatusBadRequest, "name one folder (collection_id) or one item (asset_id)")
 		return
 	}
 	if !validRole(req.Role) {
