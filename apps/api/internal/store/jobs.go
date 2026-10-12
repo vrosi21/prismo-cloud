@@ -10,7 +10,10 @@ import (
 
 const (
 	JobProcessAsset = "process_asset"
-	JobsChannel     = "prismo_jobs"
+	// Look again at a file that is already stored (queued by migrations,
+	// when the worker has learned to read something it could not before).
+	JobReprocessAsset = "reprocess_asset"
+	JobsChannel       = "prismo_jobs"
 )
 
 type Job struct {

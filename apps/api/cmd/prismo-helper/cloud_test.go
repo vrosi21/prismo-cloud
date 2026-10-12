@@ -131,7 +131,7 @@ func TestFetchKeepsTheFileUnderAReadableName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(gif) != "recording.mp4.gif" {
+	if filepath.Base(gif) != "recording.gif" {
 		t.Errorf("recording saved as %q", filepath.Base(gif))
 	}
 	if raw, _ := os.ReadFile(gif); string(raw) != "bytes of v1 gif" {

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { api, type Asset, type AssetPatch, type BulkAction, type Visibility } from '../api'
+import { api, type Asset, type AssetPatch, type BulkAction, type Kind, type Visibility } from '../api'
 import type { FolderNode } from '../lib/folders'
 import { bytes, copyImage, copyText, displayName, duration, when } from '../lib/format'
 import { errorText, log } from '../lib/log'
@@ -226,15 +226,15 @@ function Details({ asset, folders, onClose }: { asset: Asset; folders: FolderNod
           </div>
           <p className="dim -mt-2 text-[17px]">&gt; {VISIBILITY_HINT[asset.visibility]}</p>
 
-          {isPicture && (
-            <label className="flex cursor-pointer items-center gap-3">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-[var(--accent-deep)]"
-                checked={asset.kind === 'sticker'}
-                onChange={(e) => save.mutate({ kind: e.target.checked ? 'sticker' : 'image' })}
-              />
-              <span>use as sticker</span>
+          {/* The cloud works this out from the file; where it guessed wrong, say so here. */}
+          {(isPicture || asset.kind === 'gif') && (
+            <label>
+              <span className="label">listed as</span>
+              <select className="field" value={asset.kind} onChange={(e) => save.mutate({ kind: e.target.value as Kind })}>
+                <option value="image">picture</option>
+                <option value="gif">gif</option>
+                <option value="sticker">sticker</option>
+              </select>
             </label>
           )}
         </>

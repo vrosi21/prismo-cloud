@@ -23,7 +23,10 @@ How a file travels:
 1. Client asks the API for an upload slot and gets a short-lived URL.
 2. Client sends the bytes straight to object storage (never through the API).
 3. Worker verifies the bytes, stores them under their SHA-256, makes a
-   thumbnail, and a GIF for short recordings or an MP4 for GIFs.
+   thumbnail, and a GIF for short recordings or an MP4 for GIFs. An animated
+   WebP, which is what most sites save a "GIF" as, counts as a GIF and gets a
+   real one made from it: ffmpeg cannot read that format, so the worker plays
+   it itself ([webpanim.go](apps/api/internal/worker/webpanim.go)).
 4. Asset turns `ready`. `/i/<slug>` serves it, `/s/<slug>` is the preview page.
 
 ShareX cannot do step 1 and 2 separately, so `POST /v1/upload` takes a plain
@@ -80,6 +83,8 @@ across all folders.
 - Deleting a folder takes its subfolders with it. Its files are either moved to the trash
   or kept and moved up one level; the app asks which.
 - A picture put into a folder called "stickers" becomes a sticker.
+- Whether a file is a picture, a GIF or a sticker is worked out from the file itself,
+  not from its name or folder. Where that is wrong, "listed as" in the file's view changes it.
 - A capture program can name a folder by path (`screenshots/2026`); missing folders are made.
 - Search looks in titles, file names and tags.
 

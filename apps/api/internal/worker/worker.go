@@ -102,6 +102,12 @@ func (w *Worker) dispatch(ctx context.Context, job *store.Job) error {
 			return err
 		}
 		return w.processAsset(ctx, p.AssetID)
+	case store.JobReprocessAsset:
+		var p store.AssetJob
+		if err := json.Unmarshal(job.Payload, &p); err != nil {
+			return err
+		}
+		return w.reprocessAsset(ctx, p.AssetID)
 	}
 	return fmt.Errorf("unknown job kind %q", job.Kind)
 }

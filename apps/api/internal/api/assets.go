@@ -64,7 +64,9 @@ func (s *Server) view(a store.Asset) assetView {
 	public := s.cfg.PublicURL
 	v.URLs["share"] = public + "/s/" + a.Slug
 	v.URLs["raw"] = public + "/i/" + a.Slug + extFor(a)
-	if a.Kind == "video" {
+	// A recording has a GIF version, and so has an animation that is not a
+	// GIF file itself (animated WebP).
+	if a.Variant("gif") != nil {
 		v.URLs["raw_gif"] = public + "/i/" + a.Slug + ".gif"
 	}
 	if a.Mime == "image/gif" {

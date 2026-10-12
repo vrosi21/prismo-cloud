@@ -23,10 +23,10 @@ const BASE = env.PUBLIC_URL
 const mediaDir = mkdtempSync(join(tmpdir(), 'prismo-smoke-'))
 const ffmpeg = 'ffmpeg -hide_banner -loglevel error -y -f lavfi -i'
 execSync(
-  `docker compose exec -T worker sh -c "cd /tmp && ${ffmpeg} testsrc=size=640x360:rate=1 -frames:v 1 t.png && ${ffmpeg} testsrc=size=640x360:rate=15 -t 3 -pix_fmt yuv420p -c:v libx264 t.mp4 && ${ffmpeg} testsrc2=size=320x180:rate=10 -t 2 t.gif"`,
+  `docker compose exec -T worker sh -c "cd /tmp && ${ffmpeg} testsrc=size=640x360:rate=1 -frames:v 1 t.png && ${ffmpeg} testsrc=size=640x360:rate=15 -t 3 -pix_fmt yuv420p -c:v libx264 t.mp4 && ${ffmpeg} testsrc2=size=320x180:rate=10 -t 2 t.gif && ${ffmpeg} testsrc=size=64x48:rate=10 -t 1 -loop 0 t.webp && ${ffmpeg} testsrc=size=64x48:rate=1 -frames:v 1 still.webp"`,
   { cwd: root, stdio: 'inherit' },
 )
-for (const f of ['t.png', 't.mp4', 't.gif']) execSync(`docker compose cp worker:/tmp/${f} "${join(mediaDir, f)}"`, { cwd: root, stdio: 'ignore' })
+for (const f of ['t.png', 't.mp4', 't.gif', 't.webp', 'still.webp']) execSync(`docker compose cp worker:/tmp/${f} "${join(mediaDir, f)}"`, { cwd: root, stdio: 'ignore' })
 const media = (n) => readFileSync(join(mediaDir, n))
 
 let cookie = ''
@@ -462,6 +462,19 @@ check('and sees nothing shared', r.json.folders.length === 0 && r.json.items.len
 r = await signInAs('guest@example.com')
 check('and cannot sign in again', r.status === 403)
 cookie = ownerCookie
+
+// --- animated webp: what most sites save a "GIF" as ---
+r = await call('POST', '/v1/upload', { token: upTok, form: multipart('200.webp', media('t.webp'), { visibility: 'unlisted' }) })
+a = await waitReady(r.json.id)
+check('animated webp is listed as a gif, with a real GIF made from it', a?.kind === 'gif' && a.mime === 'image/webp' && a.width === 64 && a.height === 48 && ['gif', 'thumb', 'mp4'].every((v) => a.variants.includes(v)), JSON.stringify({ k: a?.kind, w: a?.width, h: a?.height, v: a?.variants }))
+r = await fetch(`${BASE}/i/${a.slug}.gif`)
+buf = Buffer.from(await r.arrayBuffer())
+check('/i/slug.gif of it is that GIF', r.status === 200 && r.headers.get('content-type') === 'image/gif' && buf.subarray(0, 4).toString() === 'GIF8', `${r.status} ${r.headers.get('content-type')}`)
+r = await call('POST', '/v1/upload', { token: upTok, form: multipart('still.webp', media('still.webp')) })
+a = await waitReady(r.json.id)
+check('a webp that does not move stays a picture', a?.kind === 'image' && !a.variants.includes('gif') && a.width === 64, JSON.stringify({ k: a?.kind, v: a?.variants }))
+r = await call('PATCH', `/v1/assets/${a.id}`, { body: { kind: 'gif' } })
+check('and can be listed as a gif by hand', r.status === 200 && r.json.kind === 'gif', r.text.slice(0, 120))
 
 // --- logout ---
 r = await call('POST', '/v1/auth/logout')

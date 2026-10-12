@@ -196,15 +196,15 @@ var extByMime = map[string]string{
 }
 
 // fetch brings the file to paste onto this computer and says where it is.
-// A recording is pasted as its GIF when it has one: that is what plays by
-// itself in a chat.
+// What has a GIF version (a recording, an animated WebP) is pasted as that:
+// it is the one thing that plays by itself in every chat.
 func (c *cloud) fetch(ctx context.Context, id string) (string, error) {
 	it, err := c.item(id)
 	if err != nil {
 		return "", err
 	}
 	path, ext := it.URLs["file"], extByMime[it.Mime]
-	if it.Kind == "video" && it.URLs["gif"] != "" {
+	if it.URLs["gif"] != "" {
 		path, ext = it.URLs["gif"], ".gif"
 	}
 	if ext == "" {
@@ -212,7 +212,8 @@ func (c *cloud) fetch(ctx context.Context, id string) (string, error) {
 	}
 	name := it.Title
 	if name == "" {
-		name = it.Filename
+		// "clip.mp4" pasted as a GIF is "clip.gif", not "clip.mp4.gif".
+		name = strings.TrimSuffix(it.Filename, filepath.Ext(it.Filename))
 	}
 
 	// The address ends in "v=" and the start of the file's hash, so the same
