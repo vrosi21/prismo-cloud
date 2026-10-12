@@ -1,0 +1,7 @@
+# protobufjs (pulled in by onnxruntime-web) has an install script that only
+# prints a notice. Saying so here keeps pnpm from stopping to ask about it.
+# Two spellings of the same thing: pnpm renamed the setting in 10.26.
+ignoredBuiltDependencies:
+  - protobufjs
+allowBuilds:
+  protobufjs: false

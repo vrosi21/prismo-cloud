@@ -1,0 +1,16 @@
+u2netp.onnx
+
+U2-Net, small variant ("u2netp"), by Xuebin Qin, Zichen Zhang, Chenyang Huang,
+Masood Dehghan, Osmar R. Zaiane and Martin Jagersand.
+https://github.com/xuebinqin/U-2-Net
+
+Licensed under the Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
+
+This ONNX file is unchanged from
+https://huggingface.co/BritishWerewolf/U-2-Netp
+revision 7112208dbac3a3642496c8d54e2f0f9bb3dc1dc8
+sha256   309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8
+
+Prismo Cloud runs it in the browser to cut the subject out of a picture
+(apps/web/src/lib/cutout.ts).

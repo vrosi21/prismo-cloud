@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api, type Asset, type AssetPatch, type BulkAction, type Visibility } from '../api'
 import type { FolderNode } from '../lib/folders'
@@ -6,6 +6,9 @@ import { bytes, copyImage, copyText, displayName, duration, when } from '../lib/
 import { errorText, log } from '../lib/log'
 import { useRefreshLibrary } from '../lib/queries'
 import { ShareDialog } from './ShareDialog'
+
+// Only fetched when somebody makes a sticker.
+const StickerMaker = lazy(() => import('./StickerMaker').then((m) => ({ default: m.StickerMaker })))
 
 interface Props {
   asset: Asset
@@ -92,6 +95,8 @@ function Details({ asset, folders, onClose }: { asset: Asset; folders: FolderNod
   const [tags, setTags] = useState(asset.tags.join(', '))
   const [confirmPurge, setConfirmPurge] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [making, setMaking] = useState(false)
+  const stopMaking = useCallback(() => setMaking(false), [])
   const trashed = asset.deleted_at !== null
   // owner: everything. edit: rename, tag, trash. view: look and download.
   const owner = asset.access === 'owner'
@@ -260,6 +265,11 @@ function Details({ asset, folders, onClose }: { asset: Asset; folders: FolderNod
               copy image
             </button>
           )}
+          {isPicture && owner && (
+            <button type="button" className="btn" onClick={() => setMaking(true)} title="crop it, take the background away, save it as a new sticker">
+              make sticker
+            </button>
+          )}
           <a className="btn" href={`${asset.urls.file}&download=1`}>
             download
           </a>
@@ -296,6 +306,11 @@ function Details({ asset, folders, onClose }: { asset: Asset; folders: FolderNod
       </div>
 
       {sharing && <ShareDialog target={{ asset_id: asset.id }} name={displayName(asset)} onClose={() => setSharing(false)} />}
+      {making && (
+        <Suspense fallback={null}>
+          <StickerMaker asset={asset} onClose={stopMaking} />
+        </Suspense>
+      )}
     </div>
   )
 }
