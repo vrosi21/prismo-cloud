@@ -69,6 +69,20 @@ func (s *Store) CreateToken(ctx context.Context, ownerID, name string, tokenHash
 	return t, err
 }
 
+// UpdateToken changes a token's name or the visibility it gives new files.
+// A nil argument leaves that setting as it is.
+func (s *Store) UpdateToken(ctx context.Context, ownerID, id string, name, visibility *string) (APIToken, error) {
+	t := APIToken{OwnerID: ownerID}
+	err := s.Pool.QueryRow(ctx,
+		`update api_tokens
+		 set name = coalesce($3, name), default_visibility = coalesce($4, default_visibility)
+		 where owner_id = $1 and id = $2
+		 returning id::text, name, scope, default_visibility, created_at, last_used_at`,
+		ownerID, id, name, visibility).
+		Scan(&t.ID, &t.Name, &t.Scope, &t.DefaultVisibility, &t.CreatedAt, &t.LastUsedAt)
+	return t, notFound(err)
+}
+
 func (s *Store) ListTokens(ctx context.Context, ownerID string) ([]APIToken, error) {
 	rows, err := s.Pool.Query(ctx,
 		`select id::text, name, scope, default_visibility, created_at, last_used_at

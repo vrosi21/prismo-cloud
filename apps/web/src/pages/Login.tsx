@@ -106,7 +106,7 @@ export function Login() {
               {dev.isPending ? 'opening...' : 'development sign-in'}
             </button>
           )}
-          {config.isPending && <p className="dim cursor">&gt; asking the wishmaster</p>}
+          {config.isPending && <p className="dim cursor">&gt; checking how you can sign in</p>}
         </div>
       </div>
     </div>

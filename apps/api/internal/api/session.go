@@ -148,8 +148,8 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request, email string, go
 	}
 	// A new member starts with the usual jars. A guest has no library.
 	if created && s.isMember(email) {
-		for _, jar := range []string{"screenshots", "gifs", "stickers"} {
-			if _, err := s.store.CollectionByName(r.Context(), u.ID, jar); err != nil {
+		for _, folder := range []string{"screenshots", "stickers"} {
+			if _, err := s.store.CollectionByPath(r.Context(), u.ID, folder); err != nil {
 				return err
 			}
 		}
@@ -217,12 +217,12 @@ func (s *Server) createToken(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "name is required (80 characters at most)")
 		return
 	}
-	if req.Scope != "upload" && req.Scope != "full" {
-		writeErr(w, http.StatusBadRequest, `scope must be "upload" or "full"`)
+	if req.Scope != "upload" && req.Scope != "device" && req.Scope != "full" {
+		writeErr(w, http.StatusBadRequest, `scope must be "upload", "device" or "full"`)
 		return
 	}
 	if req.Visibility == "" {
-		req.Visibility = "unlisted"
+		req.Visibility = "private"
 	}
 	if !validVisibility(req.Visibility) {
 		writeErr(w, http.StatusBadRequest, "unknown visibility")
@@ -236,6 +236,42 @@ func (s *Server) createToken(w http.ResponseWriter, r *http.Request) {
 	}
 	// The secret is shown once; only its hash is stored.
 	writeJSON(w, http.StatusCreated, map[string]any{"token": t, "secret": secret})
+}
+
+// updateToken renames a token or changes the visibility it gives new files.
+func (s *Server) updateToken(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Name       *string `json:"name"`
+		Visibility *string `json:"default_visibility"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.Name != nil {
+		*req.Name = strings.TrimSpace(*req.Name)
+		if *req.Name == "" || len(*req.Name) > 80 {
+			writeErr(w, http.StatusBadRequest, "name is required (80 characters at most)")
+			return
+		}
+	}
+	if req.Visibility != nil && !validVisibility(*req.Visibility) {
+		writeErr(w, http.StatusBadRequest, "unknown visibility")
+		return
+	}
+	t, err := s.store.UpdateToken(r.Context(), who(r).UserID, id, req.Name, req.Visibility)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		serverError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
 }
 
 func (s *Server) deleteToken(w http.ResponseWriter, r *http.Request) {

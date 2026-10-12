@@ -1,22 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, type Me } from '../api'
+import type { Me } from '../api'
+import { assetDragActive, useAssetDrop } from '../lib/drag'
+import { crumbsOf, type FolderNode, type FolderTree } from '../lib/folders'
 import { bytes } from '../lib/format'
-import { errorText, log, logLines } from '../lib/log'
-import { useCollections, useRefreshLibrary, useShared, useStats } from '../lib/queries'
+import { log, logLines } from '../lib/log'
+import { useFolderTree, useRefreshLibrary, useShared, useStats } from '../lib/queries'
 import { useStore } from '../lib/store'
+import { uploadTarget } from '../lib/target'
 import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/theme'
 import { uploadFiles, uploads } from '../lib/uploads'
 import { Boot, LogLines, Palette, UploadTray, type Command } from './Overlays'
 import { BmoFace, Cube, type Mood } from './sprites'
 
-const KINDS = [
+export const KINDS = [
   { id: 'image', label: 'images' },
   { id: 'gif', label: 'gifs' },
   { id: 'video', label: 'recordings' },
   { id: 'sticker', label: 'stickers' },
-  { id: 'file', label: 'files' },
+  { id: 'file', label: 'other files' },
 ]
 
 export function Shell({ me, children }: { me: Me; children: ReactNode }) {
@@ -24,22 +26,18 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
   const location = useLocation()
   const [params] = useSearchParams()
   const refresh = useRefreshLibrary()
+  const tree = useFolderTree()
+  const { data: shared } = useShared()
+  const target = useStore(uploadTarget)
   const picker = useRef<HTMLInputElement>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
 
-  const { data: shared } = useShared()
-  const collection = params.get('collection')
-  const ownJar = collection && collection !== 'none' ? collection : null
-
-  // Where new files go. Looking at a jar someone shared: into that jar, if
-  // the share allows adding. Otherwise a member's own library, in the jar
-  // being looked at. A guest anywhere else has nowhere to put files.
-  const sharedJarId = location.pathname.match(/^\/shared\/jar\/([^/]+)/)?.[1] ?? null
-  const sharedRole = shared?.jars.find((j) => j.id === sharedJarId)?.role
-  const canUpload = sharedJarId ? sharedRole === 'edit' : me.member && !location.pathname.startsWith('/shared')
-  const uploadJar = sharedJarId ?? ownJar
+  // The page on screen says where new files go. No page saying anything
+  // means: a member's library, in no folder; a guest has nowhere.
+  const canUpload = target ? target.allowed : me.member
+  const uploadFolder = target?.folderId ?? null
 
   const send = useCallback(
     (files: Iterable<File>) => {
@@ -47,17 +45,18 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
         log('err', 'nothing here you can add files to')
         return
       }
-      uploadFiles(files, { collectionId: uploadJar, onStored: refresh })
+      uploadFiles(files, { collectionId: uploadFolder, onStored: refresh })
     },
-    [canUpload, uploadJar, refresh],
+    [canUpload, uploadFolder, refresh],
   )
 
   // Drop a file anywhere, or paste a screenshot with Ctrl+V.
   useEffect(() => {
     let depth = 0
-    const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes('Files') ?? false
+    // Files from the desktop, not tiles being dragged around inside the page.
+    const fromOutside = (e: DragEvent) => !assetDragActive() && (e.dataTransfer?.types.includes('Files') ?? false)
     const enter = (e: DragEvent) => {
-      if (!hasFiles(e)) return
+      if (!fromOutside(e)) return
       depth++
       setDragging(true)
     }
@@ -65,9 +64,9 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
       depth = Math.max(0, depth - 1)
       if (depth === 0) setDragging(false)
     }
-    const over = (e: DragEvent) => hasFiles(e) && e.preventDefault()
+    const over = (e: DragEvent) => fromOutside(e) && e.preventDefault()
     const drop = (e: DragEvent) => {
-      if (!hasFiles(e)) return
+      if (!fromOutside(e)) return
       e.preventDefault()
       depth = 0
       setDragging(false)
@@ -104,32 +103,30 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
 
   useEffect(() => setMenuOpen(false), [location])
 
-  const search = useCallback(
-    (text: string) => navigate(text ? `/?q=${encodeURIComponent(text)}` : '/'),
-    [navigate],
-  )
+  const search = useCallback((text: string) => navigate(text ? `/?q=${encodeURIComponent(text)}` : '/'), [navigate])
 
   const commands = useMemo<Command[]>(
     () => [
       ...(me.member
         ? [
-            { id: 'upload', label: 'wish upload', hint: 'pick files', run: () => picker.current?.click() },
-            { id: 'library', label: 'go library', run: () => navigate('/') },
-            ...KINDS.map((k) => ({ id: `kind-${k.id}`, label: `show ${k.label}`, run: () => navigate(`/?kind=${k.id}`) })),
-            { id: 'trash', label: 'go trash', run: () => navigate('/trash') },
+            { id: 'upload', label: 'upload files', hint: 'pick files', run: () => picker.current?.click() },
+            { id: 'root', label: 'go to all files', run: () => navigate('/') },
+            ...tree.flat.slice(0, 40).map((f) => ({ id: `folder-${f.id}`, label: `open ${f.path}`, hint: 'folder', run: () => navigate(`/?folder=${f.id}`) })),
+            ...KINDS.map((k) => ({ id: `kind-${k.id}`, label: `show ${k.label}`, hint: 'by type', run: () => navigate(`/?kind=${k.id}`) })),
+            { id: 'trash', label: 'go to trash', run: () => navigate('/trash') },
           ]
         : []),
-      ...(shared?.jars ?? []).map((j) => ({
-        id: `shared-${j.id}`,
-        label: `open ${j.name}`,
-        hint: `shared by ${j.owner}`,
-        run: () => navigate(`/shared/jar/${j.id}`),
+      ...(shared?.folders ?? []).map((f) => ({
+        id: `shared-${f.id}`,
+        label: `open ${f.name}`,
+        hint: `shared by ${f.owner}`,
+        run: () => navigate(`/shared/folder/${f.id}`),
       })),
-      { id: 'settings', label: 'go settings', run: () => navigate('/settings') },
+      { id: 'settings', label: 'go to settings', run: () => navigate('/settings') },
       ...THEMES.map((t) => ({ id: `theme-${t.id}`, label: `theme ${t.name.toLowerCase()}`, hint: t.hint, run: () => setTheme(t.id) })),
       { id: 'scanlines', label: 'toggle scanlines', run: () => setScanlines(document.documentElement.dataset.scanlines !== 'on') },
     ],
-    [navigate, me.member, shared],
+    [navigate, me.member, shared, tree],
   )
 
   return (
@@ -139,7 +136,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
         <button type="button" className="btn btn-sm md:hidden" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
           menu
         </button>
-        <Link to="/" className="flex items-center gap-3" aria-label="Prismo Cloud, library">
+        <Link to="/" className="flex items-center gap-3" aria-label="Prismo Cloud, all files">
           <Cube size={22} still />
           <h1 className="hidden sm:block">PRISMO CLOUD</h1>
         </Link>
@@ -149,7 +146,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
         </button>
         {canUpload && (
           <button type="button" className="btn btn-accent" onClick={() => picker.current?.click()}>
-            make a wish
+            upload
           </button>
         )}
         <input
@@ -165,7 +162,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
       </header>
 
       <div className="flex min-h-0 flex-1 gap-3 p-3">
-        <Sidebar open={menuOpen} member={me.member} />
+        <Sidebar open={menuOpen} member={me.member} tree={tree} />
         <main className="min-w-0 flex-1">{children}</main>
       </div>
 
@@ -177,7 +174,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
         <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center bg-black/60">
           <div className="panel px-raised flex flex-col items-center gap-5 px-10 py-8">
             <Cube size={56} />
-            <h1>drop to make a wish</h1>
+            <h1>{canUpload ? 'drop to upload' : 'nothing can be added here'}</h1>
           </div>
         </div>
       )}
@@ -201,7 +198,7 @@ function SearchBox({ initial, onSearch }: { initial: string; onSearch: (text: st
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="title or file name"
-        aria-label="search library"
+        aria-label="search all files"
       />
     </form>
   )
@@ -210,51 +207,123 @@ function SearchBox({ initial, onSearch }: { initial: string; onSearch: (text: st
 function NavItem({ to, active, count, children }: { to: string; active: boolean; count?: number; children: ReactNode }) {
   return (
     <Link to={to} className="nav-item" aria-current={active ? 'page' : undefined}>
-      <span className="truncate">{children}</span>
-      {count !== undefined && <span className="opacity-70">{count}</span>}
+      <span className="grow">{children}</span>
+      {count !== undefined && <span className="count">{count}</span>}
     </Link>
   )
 }
 
-function Sidebar({ open, member }: { open: boolean; member: boolean }) {
+// Which folders are open in the tree. Remembered, so the tree looks the same
+// after a reload; storage may be unavailable, and then it just is not.
+function useOpenFolders() {
+  const [open, setOpen] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem('prismo.tree') ?? '[]') as string[])
+    } catch {
+      return new Set()
+    }
+  })
+  const save = (next: Set<string>) => {
+    try {
+      localStorage.setItem('prismo.tree', JSON.stringify([...next]))
+    } catch {
+      /* not remembered */
+    }
+    return next
+  }
+  const toggle = useCallback((id: string) => {
+    setOpen((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(id)) next.add(id)
+      return save(next)
+    })
+  }, [])
+  const reveal = useCallback((ids: string[]) => {
+    setOpen((prev) => (ids.every((id) => prev.has(id)) ? prev : save(new Set([...prev, ...ids]))))
+  }, [])
+  return { open, toggle, reveal }
+}
+
+interface TreeProps {
+  node: FolderNode
+  current: string | null
+  open: Set<string>
+  toggle: (id: string) => void
+  refresh: () => void
+}
+
+function TreeRow({ node, current, open, toggle, refresh }: TreeProps) {
+  const drop = useAssetDrop(node.id, node.name, refresh)
+  const isOpen = open.has(node.id)
+  return (
+    <>
+      <div className={`nav-item ${drop.over ? 'drop-over' : ''}`} aria-current={current === node.id ? 'page' : undefined} {...drop.handlers}>
+        <span className="shrink-0" style={{ width: node.depth * 12 }} />
+        {node.children.length > 0 ? (
+          <button type="button" className="twist" aria-expanded={isOpen} aria-label={`${isOpen ? 'close' : 'open'} ${node.name}`} onClick={() => toggle(node.id)}>
+            {isOpen ? '-' : '+'}
+          </button>
+        ) : (
+          <span className="twist pointer-events-none" aria-hidden />
+        )}
+        <Link to={`/?folder=${node.id}`} className="grow">
+          {node.name}
+        </Link>
+        <span className="count">{node.count}</span>
+      </div>
+      {isOpen && node.children.map((child) => <TreeRow key={child.id} node={child} current={current} open={open} toggle={toggle} refresh={refresh} />)}
+    </>
+  )
+}
+
+function Sidebar({ open, member, tree }: { open: boolean; member: boolean; tree: FolderTree }) {
   const { pathname } = useLocation()
   const [params] = useSearchParams()
-  const { data: collections = [] } = useCollections()
   const { data: stats } = useStats()
   const { data: shared } = useShared()
-  const qc = useQueryClient()
-  const [adding, setAdding] = useState(false)
-  const [name, setName] = useState('')
-
-  const create = useMutation({
-    mutationFn: (n: string) => api.createCollection(n),
-    onSuccess: () => {
-      setAdding(false)
-      setName('')
-      void qc.invalidateQueries({ queryKey: ['collections'] })
-    },
-    onError: (e) => log('err', errorText(e)),
-  })
+  const refresh = useRefreshLibrary()
+  const folders = useOpenFolders()
+  const rootDrop = useAssetDrop(null, 'all files', refresh)
 
   const home = pathname === '/'
   const kind = home ? params.get('kind') : null
-  const collection = home ? params.get('collection') : null
-  const filtered = Boolean(kind || collection || params.get('q') || params.get('tag'))
-  const sharedJars = shared?.jars ?? []
+  const folder = home ? params.get('folder') : null
+  const everything = home && params.get('view') === 'all'
+  const atRoot = home && !folder && !kind && !everything && !params.get('q') && !params.get('tag')
+  const sharedFolders = shared?.folders ?? []
   const sharedItems = shared?.items.length ?? 0
+
+  // Keep the folder being looked at visible in the tree.
+  const { reveal } = folders
+  useEffect(() => {
+    if (folder) reveal(crumbsOf(tree, folder).slice(0, -1).map((f) => f.id))
+  }, [folder, tree, reveal])
 
   return (
     <nav
-      className={`panel px w-[230px] shrink-0 flex-col gap-4 overflow-y-auto py-3 md:flex ${
+      className={`panel px w-[250px] shrink-0 flex-col gap-4 overflow-y-auto py-3 md:flex ${
         open ? 'absolute bottom-[52px] left-3 top-[70px] z-30 flex' : 'hidden'
       }`}
-      aria-label="library"
+      aria-label="files"
     >
       {/* A guest has no library of their own, only what was shared. */}
       {member && (
         <>
           <div>
-            <NavItem to="/" active={home && !filtered} count={stats?.assets}>
+            <h3 className="dim px-[14px] pb-2">FOLDERS</h3>
+            <div className={`nav-item ${rootDrop.over ? 'drop-over' : ''}`} aria-current={atRoot ? 'page' : undefined} {...rootDrop.handlers}>
+              <Link to="/" className="grow">
+                all files
+              </Link>
+            </div>
+            {tree.roots.map((node) => (
+              <TreeRow key={node.id} node={node} current={folder} open={folders.open} toggle={folders.toggle} refresh={refresh} />
+            ))}
+          </div>
+
+          <div>
+            <h3 className="dim px-[14px] pb-2">BY TYPE</h3>
+            <NavItem to="/?view=all" active={everything} count={stats?.assets}>
               everything
             </NavItem>
             {KINDS.map((k) => (
@@ -263,52 +332,15 @@ function Sidebar({ open, member }: { open: boolean; member: boolean }) {
               </NavItem>
             ))}
           </div>
-
-          <div>
-            <h3 className="dim px-[10px] pb-2">PICKLE JARS</h3>
-            {collections.map((c) => (
-              <NavItem key={c.id} to={`/?collection=${c.id}`} active={collection === c.id} count={c.count}>
-                {c.name}
-              </NavItem>
-            ))}
-            <NavItem to="/?collection=none" active={collection === 'none'}>
-              no jar
-            </NavItem>
-            {adding ? (
-              <form
-                className="px-[10px] pt-3"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  if (name.trim()) create.mutate(name.trim())
-                }}
-              >
-                <input
-                  className="field"
-                  autoFocus
-                  value={name}
-                  maxLength={60}
-                  placeholder="jar name"
-                  aria-label="new jar name"
-                  onChange={(e) => setName(e.target.value)}
-                  onBlur={() => !name.trim() && setAdding(false)}
-                  onKeyDown={(e) => e.key === 'Escape' && setAdding(false)}
-                />
-              </form>
-            ) : (
-              <button type="button" className="nav-item dim" onClick={() => setAdding(true)}>
-                + new jar
-              </button>
-            )}
-          </div>
         </>
       )}
 
-      {(sharedJars.length > 0 || sharedItems > 0 || !member) && (
+      {(sharedFolders.length > 0 || sharedItems > 0 || !member) && (
         <div>
-          <h3 className="dim px-[10px] pb-2">SHARED WITH ME</h3>
-          {sharedJars.map((j) => (
-            <NavItem key={j.id} to={`/shared/jar/${j.id}`} active={pathname === `/shared/jar/${j.id}`} count={j.count}>
-              {j.name}
+          <h3 className="dim px-[14px] pb-2">SHARED WITH ME</h3>
+          {sharedFolders.map((f) => (
+            <NavItem key={f.id} to={`/shared/folder/${f.id}`} active={pathname === `/shared/folder/${f.id}`} count={f.count}>
+              {f.name}
             </NavItem>
           ))}
           {sharedItems > 0 && (
@@ -316,7 +348,7 @@ function Sidebar({ open, member }: { open: boolean; member: boolean }) {
               single items
             </NavItem>
           )}
-          {sharedJars.length === 0 && sharedItems === 0 && <p className="dim px-[10px]">nothing yet</p>}
+          {sharedFolders.length === 0 && sharedItems === 0 && <p className="dim px-[14px]">nothing yet</p>}
         </div>
       )}
 
@@ -347,9 +379,9 @@ function StatusBar({ email, member }: { email: string; member: boolean }) {
   // The face follows the app: trouble first, then work, then good news.
   const status = (): [Mood, string] => {
     if (lines.some((l) => l.level === 'err')) return ['sad', 'something went wrong']
-    if (sending > 0) return ['busy', `sending ${sending}`]
+    if (sending > 0) return ['busy', `uploading ${sending}`]
     if (processing > 0) return ['busy', `processing ${processing}`]
-    if (lines.some((l) => l.level === 'ok')) return ['happy', 'wish granted']
+    if (lines.some((l) => l.level === 'ok')) return ['happy', 'done']
     return ['idle', 'ready']
   }
   const [mood, text] = status()
@@ -362,7 +394,7 @@ function StatusBar({ email, member }: { email: string; member: boolean }) {
       <span className="shrink-0">{text}</span>
       {stats && member && (
         <span className="dim hidden truncate sm:inline">
-          {stats.assets} items · {bytes(stats.bytes)}
+          {stats.assets} files · {bytes(stats.bytes)}
         </span>
       )}
       <span className="flex-1" />

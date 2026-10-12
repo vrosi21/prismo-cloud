@@ -6,7 +6,7 @@ import { errorText, log } from '../lib/log'
 
 interface Props {
   target: ShareTarget
-  /** Name of the jar or item, for the heading. */
+  /** Name of the folder or item, for the heading. */
   name: string
   onClose: () => void
 }
@@ -15,7 +15,7 @@ interface Props {
 // so access can be taken back, and the link is useless to anyone else.
 export function ShareDialog({ target, name, onClose }: Props) {
   const qc = useQueryClient()
-  const isJar = 'collection_id' in target
+  const isFolder = 'collection_id' in target
   const key = ['shares', target]
   const { data: shares = [], isPending } = useQuery({ queryKey: key, queryFn: () => api.shares(target) })
   const [email, setEmail] = useState('')
@@ -75,7 +75,7 @@ export function ShareDialog({ target, name, onClose }: Props) {
       <div className="panel px-raised pop relative flex w-full max-w-[620px] flex-col gap-4 p-5">
         <div className="flex items-start justify-between gap-3">
           <h2 className="break-all uppercase">
-            share {isJar ? 'jar' : 'item'}: {name}
+            share {isFolder ? 'folder' : 'file'}: {name}
           </h2>
           <button type="button" className="btn btn-sm" onClick={onClose} aria-label="close">
             x
@@ -85,8 +85,14 @@ export function ShareDialog({ target, name, onClose }: Props) {
         <p className="dim text-[18px] leading-tight">
           &gt; view: look and download.
           <br />
-          &gt; edit: also {isJar ? 'add files, ' : ''}rename, tag and move to trash. never: delete for good, share further.
+          &gt; edit: also {isFolder ? 'add files, ' : ''}rename, tag and move to trash. never: delete for good, share further.
           <br />
+          {isFolder && (
+            <>
+              &gt; sharing a folder shares everything in it, subfolders included.
+              <br />
+            </>
+          )}
           &gt; they sign in with that google account. the link works for nobody else.
         </p>
 

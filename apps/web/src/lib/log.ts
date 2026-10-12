@@ -1,6 +1,6 @@
 import { createStore } from './store'
 
-// Toasts, drawn as terminal log lines: "[ok] wish granted: shot.png".
+// Toasts, drawn as terminal log lines: "[ok] uploaded: shot.png".
 export type LogLevel = 'ok' | 'err' | 'info'
 
 export interface LogLine {

@@ -115,6 +115,9 @@ func (s *Server) listAssets(w http.ResponseWriter, r *http.Request) {
 	s.writeAssetPage(w, r, f, accessOwner, nil)
 }
 
+// maxSelectAll caps how many ids "select all" hands out in one go.
+const maxSelectAll = 5000
+
 // writeAssetPage finishes a filter from the query string (kind, tag, search,
 // cursor, limit), runs it and writes one page. Whose assets and which jar are
 // decided by the caller, never by the query string.
@@ -134,6 +137,21 @@ func (s *Server) writeAssetPage(w http.ResponseWriter, r *http.Request, f store.
 	}
 	if f.Cursor != "" && !isUUID(f.Cursor) {
 		writeErr(w, http.StatusBadRequest, "bad cursor")
+		return
+	}
+
+	// ?ids=1: just the ids of everything that matches, for "select all".
+	if q.Get("ids") == "1" {
+		ids, err := s.store.ListAssetIDs(r.Context(), f, maxSelectAll+1)
+		if err != nil {
+			serverError(w, r, err)
+			return
+		}
+		truncated := len(ids) > maxSelectAll
+		if truncated {
+			ids = ids[:maxSelectAll]
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ids": ids, "truncated": truncated})
 		return
 	}
 
@@ -415,86 +433,4 @@ func (s *Server) tags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
-}
-
-// --- Collections --------------------------------------------------------------
-
-func cleanName(name string) (string, bool) {
-	name = strings.TrimSpace(name)
-	return name, name != "" && len(name) <= 60
-}
-
-func (s *Server) listCollections(w http.ResponseWriter, r *http.Request) {
-	cols, err := s.store.ListCollections(r.Context(), who(r).UserID)
-	if err != nil {
-		serverError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"collections": cols})
-}
-
-func (s *Server) createCollection(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name string `json:"name"`
-	}
-	if !decode(w, r, &req) {
-		return
-	}
-	name, ok := cleanName(req.Name)
-	if !ok {
-		writeErr(w, http.StatusBadRequest, "name is required (60 characters at most)")
-		return
-	}
-	c, err := s.store.CollectionByName(r.Context(), who(r).UserID, name)
-	if err != nil {
-		serverError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, c)
-}
-
-func (s *Server) renameCollection(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
-	var req struct {
-		Name string `json:"name"`
-	}
-	if !decode(w, r, &req) {
-		return
-	}
-	name, ok := cleanName(req.Name)
-	if !ok {
-		writeErr(w, http.StatusBadRequest, "name is required (60 characters at most)")
-		return
-	}
-	err := s.store.RenameCollection(r.Context(), who(r).UserID, id, name)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeErr(w, http.StatusNotFound, "not found")
-	case isUniqueViolation(err):
-		writeErr(w, http.StatusConflict, "a collection with that name already exists")
-	case err != nil:
-		serverError(w, r, err)
-	default:
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-func (s *Server) deleteCollection(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
-	err := s.store.DeleteCollection(r.Context(), who(r).UserID, id)
-	if errors.Is(err, store.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "not found")
-		return
-	}
-	if err != nil {
-		serverError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }

@@ -22,6 +22,7 @@ export interface Asset {
   slug: string
   source: string
   tags: string[]
+  /** The folder the file is in; null when it is in none. */
   collection_id: string | null
   created_at: string
   updated_at: string
@@ -32,16 +33,20 @@ export interface Asset {
   access: Access
 }
 
-export interface Collection {
+/** A folder. The API calls it a collection. */
+export interface Folder {
   id: string
   name: string
+  /** null at the top level. */
+  parent_id: string | null
+  /** Files directly inside, not counting subfolders. */
   count: number
 }
 
 export interface Token {
   id: string
   name: string
-  scope: 'upload' | 'full'
+  scope: 'upload' | 'device' | 'full'
   default_visibility: Visibility
   created_at: string
   last_used_at: string | null
@@ -66,10 +71,10 @@ export interface Share {
   invite_url: string
 }
 
-/** What gets shared: one jar or one item. */
+/** What gets shared: one folder or one item. */
 export type ShareTarget = { collection_id: string } | { asset_id: string }
 
-export interface SharedJar {
+export interface SharedFolder {
   id: string
   name: string
   role: Role
@@ -100,6 +105,7 @@ export interface Stats {
 export interface AssetFilter {
   trashed?: boolean
   kind?: string
+  /** A folder id, or "none" for files that are in no folder. Unset: every folder. */
   collection?: string
   tag?: string
   q?: string
@@ -108,6 +114,13 @@ export interface AssetFilter {
 export interface AssetPage {
   assets: Asset[]
   next_cursor: string | null
+}
+
+export interface SharedFolderPage extends AssetPage {
+  folder: { id: string; name: string; role: Role }
+  /** Path from the folder that was shared down to this one. */
+  crumbs: { id: string; name: string }[]
+  folders: Folder[]
 }
 
 export interface UploadTicket {
@@ -121,7 +134,10 @@ export interface NewUpload {
   bytes: number
   sha256?: string
   collection_id?: string | null
+  /** A folder path such as "stickers"; created when missing. */
+  collection?: string
   visibility?: Visibility
+  kind?: 'sticker'
 }
 
 export type AssetPatch = Partial<Pick<Asset, 'title' | 'tags' | 'visibility' | 'kind' | 'collection_id'>>
@@ -130,6 +146,9 @@ export type BulkAction =
   | { action: 'trash' | 'restore' | 'purge' }
   | { action: 'collection'; collection_id: string | null }
   | { action: 'visibility'; visibility: Visibility }
+
+/** The server takes this many ids in one bulk call. */
+export const BULK_LIMIT = 500
 
 export class ApiError extends Error {
   status: number
@@ -167,6 +186,14 @@ function query(params: Record<string, string | undefined>): string {
   return s ? `?${s}` : ''
 }
 
+const filterParams = (f: AssetFilter) => ({
+  trashed: f.trashed ? '1' : undefined,
+  kind: f.kind,
+  collection: f.collection,
+  tag: f.tag,
+  q: f.q,
+})
+
 export const api = {
   authConfig: () => request<{ google: boolean; dev: boolean }>('GET', '/v1/auth/config'),
   devLogin: () => request<void>('POST', '/v1/auth/dev'),
@@ -175,25 +202,25 @@ export const api = {
   me: () => request<Me>('GET', '/v1/me'),
   stats: () => request<Stats>('GET', '/v1/stats'),
 
-  assets: (f: AssetFilter, cursor?: string) =>
-    request<AssetPage>(
-      'GET',
-      '/v1/assets' +
-        query({ trashed: f.trashed ? '1' : undefined, kind: f.kind, collection: f.collection, tag: f.tag, q: f.q, cursor }),
-    ),
+  assets: (f: AssetFilter, cursor?: string) => request<AssetPage>('GET', '/v1/assets' + query({ ...filterParams(f), cursor })),
+  /** Ids of everything a filter matches, including what is not loaded yet. */
+  assetIds: (f: AssetFilter) => request<{ ids: string[]; truncated: boolean }>('GET', '/v1/assets' + query({ ...filterParams(f), ids: '1' })),
   asset: (id: string) => request<Asset>('GET', `/v1/assets/${id}`),
   patchAsset: (id: string, patch: AssetPatch) => request<Asset>('PATCH', `/v1/assets/${id}`, patch),
   // One item at a time: unlike bulk, this also works on items shared with you for editing.
   trashAsset: (id: string) => request<void>('DELETE', `/v1/assets/${id}`),
+  /** At most BULK_LIMIT ids; lib/bulk.ts splits longer lists. */
   bulk: (ids: string[], change: BulkAction) => request<{ changed: number }>('POST', '/v1/assets/bulk', { ids, ...change }),
 
   createUpload: (u: NewUpload) => request<UploadTicket>('POST', '/v1/assets', u),
   completeUpload: (id: string) => request<Asset>('POST', `/v1/assets/${id}/complete`),
 
-  collections: () => request<{ collections: Collection[] }>('GET', '/v1/collections').then((r) => r.collections),
-  createCollection: (name: string) => request<Collection>('POST', '/v1/collections', { name }),
-  renameCollection: (id: string, name: string) => request<void>('PATCH', `/v1/collections/${id}`, { name }),
-  deleteCollection: (id: string) => request<void>('DELETE', `/v1/collections/${id}`),
+  folders: () => request<{ collections: Folder[] }>('GET', '/v1/collections').then((r) => r.collections),
+  createFolder: (name: string, parentId: string | null) => request<Folder>('POST', '/v1/collections', { name, parent_id: parentId }),
+  /** parent_id: null moves the folder to the top level. */
+  updateFolder: (id: string, change: { name?: string; parent_id?: string | null }) => request<void>('PATCH', `/v1/collections/${id}`, change),
+  /** Subfolders go with it. Its files are trashed, or kept and moved up one level. */
+  deleteFolder: (id: string, trashFiles: boolean) => request<void>('DELETE', `/v1/collections/${id}` + query({ files: trashFiles ? 'trash' : undefined })),
 
   shares: (target: ShareTarget) =>
     request<{ shares: Share[] }>(
@@ -204,15 +231,13 @@ export const api = {
   updateShare: (id: string, role: Role) => request<Share>('PATCH', `/v1/shares/${id}`, { role }),
   deleteShare: (id: string) => request<void>('DELETE', `/v1/shares/${id}`),
 
-  shared: () => request<{ jars: SharedJar[]; items: SharedItem[] }>('GET', '/v1/shared'),
-  sharedJarAssets: (id: string, f: AssetFilter, cursor?: string) =>
-    request<AssetPage & { jar: { id: string; name: string; role: Role } }>(
-      'GET',
-      `/v1/shared/jars/${id}/assets` + query({ kind: f.kind, tag: f.tag, q: f.q, cursor }),
-    ),
+  shared: () => request<{ folders: SharedFolder[]; items: SharedItem[] }>('GET', '/v1/shared'),
+  sharedFolder: (id: string, f: AssetFilter, cursor?: string) =>
+    request<SharedFolderPage>('GET', `/v1/shared/folders/${id}/assets` + query({ kind: f.kind, tag: f.tag, q: f.q, cursor })),
 
   tokens: () => request<{ tokens: Token[] }>('GET', '/v1/tokens').then((r) => r.tokens),
   createToken: (name: string, scope: Token['scope'], default_visibility: Visibility) =>
     request<{ token: Token; secret: string }>('POST', '/v1/tokens', { name, scope, default_visibility }),
+  updateToken: (id: string, change: { name?: string; default_visibility?: Visibility }) => request<Token>('PATCH', `/v1/tokens/${id}`, change),
   deleteToken: (id: string) => request<void>('DELETE', `/v1/tokens/${id}`),
 }

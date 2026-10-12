@@ -1,7 +1,7 @@
 # Prismo Cloud
 
 Self-hosted media cloud. Capture on your PC, it lands on your server, sorted into
-jars, with links that preview inline in chats. Drawn like BMO's screen, set in
+folders, with links that preview inline in chats. Drawn like BMO's screen, set in
 Prismo's Time Room.
 
 ## Layout
@@ -65,6 +65,21 @@ In Google Cloud Console, the OAuth client (type "Web application") must list thi
 https://<your public address>/v1/auth/google/callback
 ```
 
+## Folders
+
+Files live in folders, and folders can sit inside folders. The sidebar shows the tree;
+the main view shows one folder at a time: its subfolders, then the files directly in it.
+"By type" in the sidebar is the other way to look: every picture, GIF, recording or sticker
+across all folders.
+
+- Drag files onto a folder (in the tree, on a tile, or on a step of the path) to move them.
+- Ctrl+click picks single files, Shift+click a range, Ctrl+A everything in view,
+  Delete moves the selection to the trash, Escape lets go of it.
+- Deleting a folder takes its subfolders with it. Its files are either moved to the trash
+  or kept and moved up one level; the app asks which.
+- A picture put into a folder called "stickers" becomes a sticker.
+- A capture program can name a folder by path (`screenshots/2026`); missing folders are made.
+
 ## Sharing
 
 Two different things, on purpose:
@@ -72,16 +87,17 @@ Two different things, on purpose:
 | | By link | With a person |
 |---|---|---|
 | Who gets in | anyone holding the link | one Google account |
-| Set where | item -> "anyone with link": unlisted or public | jar -> "share jar", or item -> "share with a person" |
-| Can do | look and download, nothing else, ever | **view**: look and download. **edit**: also add files to a shared jar, rename, tag, move to trash |
+| Set where | item -> "anyone with link": unlisted or public | folder -> "share", or file -> "share with a person" |
+| Can do | look and download, nothing else, ever | **view**: look and download. **edit**: also add files to a shared folder, rename, tag, move to trash |
 | Take it back | set the item to private | revoke in the same dialog; works at once |
 
 A link can be forwarded, so a link never allows changing anything. Whoever is to edit
 has to sign in.
 
-Sharing with a person makes them a **guest**: they can sign in with that Google account
+Sharing a folder shares everything in it, subfolders included. Sharing with a person makes
+them a **guest**: they can sign in with that Google account
 although they are not in `ALLOWED_EMAILS`, see only what was shared with them, and have
-no library of their own. Files a guest adds to a shared jar belong to the jar's owner and
+no library of their own. Files a guest adds to a shared folder belong to the folder's owner and
 start private. Only the owner can delete for good, change who has the link, or share
 further. The dialog gives an invitation link to send; opening it shows which account was
 invited, and no other account gets in.
@@ -148,7 +164,7 @@ Settings -> capture clients -> create a token. Then either:
 
 - **ShareX**: download the config offered right after creating the token and
   double-click it. Every capture uploads and its link goes to the clipboard.
-  Make one config per jar and bind each to its own hotkey.
+  Make one config per folder and bind each to its own hotkey.
 - **Folder watcher**: uploads whatever appears in a folder, by default
   `Pictures\Screenshots` (Win+PrtScn, Snipping Tool).
 

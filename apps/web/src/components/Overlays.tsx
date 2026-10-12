@@ -39,7 +39,7 @@ export function UploadTray() {
   return (
     <div className="panel px-raised fixed bottom-[52px] right-4 z-40 w-[min(380px,92vw)]">
       <div className="flex items-center justify-between gap-3 px-3 py-2">
-        <h3>{active > 0 ? `granting ${active} wish${active === 1 ? '' : 'es'}` : 'wishes granted'}</h3>
+        <h3>{active > 0 ? `uploading ${active} file${active === 1 ? '' : 's'}` : 'uploads finished'}</h3>
         {active === 0 && (
           <button type="button" className="btn btn-sm" onClick={clearFinished}>
             clear
@@ -69,8 +69,8 @@ export function UploadTray() {
 const BOOT_LINES = [
   'PRISMO CLOUD v0.1',
   '> waking time room ......... ok',
-  '> counting pickle jars ..... ok',
-  '> projecting wishmaster .... ok',
+  '> opening folders .......... ok',
+  '> spinning up the cube ..... ok',
   '> ready.',
 ]
 
@@ -202,8 +202,8 @@ export function Palette({ commands, onSearch, onClose }: PaletteProps) {
                   onClose()
                 }}
               >
-                <span>{c.label}</span>
-                {c.hint && <span className="opacity-70">{c.hint}</span>}
+                <span className="grow">{c.label}</span>
+                {c.hint && <span className="count">{c.hint}</span>}
               </button>
             </li>
           ))}

@@ -100,7 +100,7 @@ check('me', r.status === 200 && r.json.user.email === 'dev@localhost')
 r = await fetch(BASE + '/v1/collections', { method: 'POST', headers: { Cookie: cookie, Origin: 'http://evil.example', 'Content-Type': 'application/json' }, body: '{"name":"x"}' })
 check('cross-site POST with cookie refused', r.status === 403)
 r = await call('GET', '/v1/collections')
-check('default jars seeded', r.json.collections.map((c) => c.name).join() === 'gifs,screenshots,stickers', r.json.collections.map((c) => c.name).join())
+check('default folders seeded', r.json.collections.map((c) => c.name).join() === 'screenshots,stickers', r.json.collections.map((c) => c.name).join())
 
 // --- tokens ---
 r = await call('POST', '/v1/tokens', { body: { name: 'e2e sharex', scope: 'upload', default_visibility: 'unlisted' } })
@@ -234,6 +234,100 @@ check('stats', r.status === 200 && r.json.assets >= 4 && r.json.bytes > 0, JSON.
 r = await call('GET', '/v1/tags')
 check('tags', r.json.tags.some((t) => t.tag === 'a'))
 
+// --- folders inside folders ---
+const extra = (name, tail, fields = {}) => call('POST', '/v1/upload', { token: upTok, form: multipart(name, Buffer.concat([media(name.endsWith('.mp4') ? 't.mp4' : 't.png'), Buffer.from(tail)]), fields) })
+r = await call('POST', '/v1/collections', { body: { name: 'projects' } })
+const top = r.json
+check('create a folder', r.status === 201 && top.parent_id === null)
+r = await call('POST', '/v1/collections', { body: { name: 'alpha', parent_id: top.id } })
+const sub = r.json
+check('create a folder inside it', r.status === 201 && sub.parent_id === top.id)
+r = await call('POST', '/v1/collections', { body: { name: 'Alpha', parent_id: top.id } })
+check('the same name next to it is refused', r.status === 409, r.json?.error)
+r = await call('POST', '/v1/collections', { body: { name: 'alpha' } })
+const topAlpha = r.json
+check('the same name somewhere else is fine', r.status === 201)
+r = await call('POST', '/v1/collections', { body: { name: 'a/b' } })
+check('a slash in a folder name is refused', r.status === 400)
+r = await call('PATCH', `/v1/collections/${top.id}`, { body: { parent_id: sub.id } })
+check('a folder cannot be moved into its own subfolder', r.status === 400, r.json?.error)
+r = await call('PATCH', `/v1/collections/${top.id}`, { body: { parent_id: top.id } })
+check('nor into itself', r.status === 400)
+r = await call('PATCH', `/v1/collections/${topAlpha.id}`, { body: { parent_id: sub.id, name: 'beta' } })
+check('move and rename a folder', r.status === 204)
+r = await extra('deep.png', 'deep', { collection: 'projects/alpha/beta/gamma' })
+const deep = r.json
+a = await waitReady(deep.id)
+let cols = (await call('GET', '/v1/collections')).json.collections
+const gamma = cols.find((c) => c.name === 'gamma')
+const beta = cols.find((c) => c.name === 'beta')
+check('uploading to a path creates the missing folders', a?.collection_id === gamma?.id && gamma.parent_id === beta.id && beta.parent_id === sub.id && gamma.count === 1, JSON.stringify({ g: gamma?.parent_id === beta?.id, b: beta?.parent_id === sub.id, n: gamma?.count }))
+r = await extra('deep2.png', 'deep2', { collection: 'projects/alpha/beta/gamma' })
+await waitReady(r.json.id)
+cols = (await call('GET', '/v1/collections')).json.collections
+check('the same path again reuses the folders', cols.filter((c) => c.name === 'gamma').length === 1 && cols.find((c) => c.name === 'gamma').count === 2)
+const deep2 = r.json
+r = await call('GET', `/v1/assets?collection=${sub.id}`)
+check('a folder lists only what is directly inside', r.json.assets.length === 0)
+r = await call('DELETE', `/v1/collections/${beta.id}`)
+check('delete a folder, keeping its files', r.status === 204)
+a = (await call('GET', `/v1/assets/${deep.id}`)).json
+cols = (await call('GET', '/v1/collections')).json.collections
+check('the files move up one level, the subfolders are gone', a.collection_id === sub.id && a.deleted_at === null && !cols.some((c) => c.name === 'gamma' || c.name === 'beta'))
+r = await call('DELETE', `/v1/collections/${top.id}?files=trash`)
+a = (await call('GET', `/v1/assets/${deep.id}`)).json
+check('delete a folder with its files: they go to the trash', r.status === 204 && a.deleted_at !== null && a.collection_id === null)
+r = await call('POST', '/v1/assets/bulk', { body: { ids: [deep.id, deep2.id], action: 'purge' } })
+check('and can be emptied from there', r.json?.changed === 2)
+
+// --- the "stickers" folder ---
+const stickers = cols.find((c) => c.name === 'stickers')
+r = await extra('st.png', 'sticker', { collection: 'stickers' })
+a = await waitReady(r.json.id)
+check('a picture uploaded into "stickers" is a sticker', a?.kind === 'sticker', a?.kind)
+r = await extra('st.mp4', 'zz', { collection: 'stickers' })
+a = await waitReady(r.json.id)
+check('a recording put there stays a recording', a?.kind === 'video', a?.kind)
+r = await extra('mv.png', 'move-me')
+a = await waitReady(r.json.id)
+check('a picture elsewhere is just a picture', a?.kind === 'image')
+r = await call('PATCH', `/v1/assets/${a.id}`, { body: { collection_id: stickers.id } })
+check('moved into "stickers" it becomes a sticker', r.status === 200 && r.json.kind === 'sticker')
+r = await extra('mv2.png', 'move-me-too')
+a = await waitReady(r.json.id)
+r = await call('POST', '/v1/assets/bulk', { body: { ids: [a.id], action: 'collection', collection_id: stickers.id } })
+a = (await call('GET', `/v1/assets/${a.id}`)).json
+check('same when moved together with others', a.kind === 'sticker')
+
+// --- device token: may add and look, never change ---
+r = await call('POST', '/v1/tokens', { body: { name: 'desktop', scope: 'device' } })
+const devTok = r.json?.secret
+check('create a device token; its uploads are private unless told otherwise', r.status === 201 && r.json.token.default_visibility === 'private' && r.json.token.scope === 'device')
+r = await call('GET', '/v1/assets?limit=1', { token: devTok })
+check('device token can list', r.status === 200 && r.json.assets.length === 1)
+r = await call('GET', `/v1/assets/${png.id}/file?variant=thumb`, { token: devTok })
+check('device token can fetch files', r.status === 200)
+r = await call('PATCH', `/v1/assets/${png.id}`, { token: devTok, body: { title: 'x' } })
+check('device token cannot change anything', r.status === 403)
+r = await call('DELETE', `/v1/assets/${png.id}`, { token: devTok })
+check('device token cannot delete', r.status === 403)
+r = await call('POST', '/v1/upload', { token: devTok, form: multipart('dev.png', Buffer.concat([media('t.png'), Buffer.from('device')])) })
+check('device token can upload, and the file is private', r.status === 201 && r.json.asset.visibility === 'private')
+const sharexTok = (await call('GET', '/v1/tokens')).json.tokens.find((t) => t.name === 'e2e sharex')
+r = await call('PATCH', `/v1/tokens/${sharexTok.id}`, { body: { default_visibility: 'private' } })
+check('change what an existing token does with new files', r.status === 200 && r.json.default_visibility === 'private' && r.json.name === 'e2e sharex')
+r = await extra('priv.png', 'now-private')
+check('its uploads are private from then on', r.json.asset.visibility === 'private')
+r = await call('PATCH', `/v1/tokens/${sharexTok.id}`, { token: devTok, body: { default_visibility: 'public' } })
+check('a token cannot change tokens', r.status === 403)
+
+// --- ids for "select all" ---
+const everything = (await call('GET', '/v1/assets?limit=200')).json.assets
+r = await call('GET', '/v1/assets?ids=1')
+check('ids of everything that matches', r.status === 200 && r.json.ids.length === everything.length && r.json.truncated === false && r.json.ids[0] === everything[0].id, `${r.json?.ids?.length} of ${everything.length}`)
+r = await call('GET', '/v1/assets?ids=1&kind=video')
+check('ids respect the filter', r.json.ids.length === everything.filter((x) => x.kind === 'video').length && r.json.ids.length >= 2)
+
 // --- sharing with a specific person ---
 const ownerCookie = cookie
 const jar = (await call('GET', '/v1/collections')).json.collections.find((c) => c.name === 'screenshots')
@@ -260,24 +354,35 @@ check('share needs a real address', r.status === 400)
 r = await call('POST', '/v1/shares', { body: { collection_id: jar.id, email: 'x@example.com', role: 'admin' } })
 check('share needs a known role', r.status === 400)
 
+r = await call('POST', '/v1/collections', { body: { name: 'inner', parent_id: jar.id } })
+const inner = r.json
+r = await extra('inner.png', 'inner', { collection: 'screenshots/inner' })
+const innerItem = await waitReady(r.json.id)
+
 const guest = await signInAs('guest@example.com')
 check('invited guest can sign in', guest.status === 204 && guest.cookie.startsWith('prismo_session='))
 cookie = guest.cookie
 r = await call('GET', '/v1/me')
 check('guest is not a member', r.json.member === false && r.json.user.email === 'guest@example.com')
 r = await call('GET', '/v1/shared')
-check('guest sees the shared jar', r.json.jars.length === 1 && r.json.jars[0].id === jar.id && r.json.jars[0].role === 'view' && r.json.jars[0].owner === 'dev@localhost', JSON.stringify(r.json.jars))
-r = await call('GET', `/v1/shared/jars/${jar.id}/assets`)
-check('guest can list the shared jar, read-only', r.status === 200 && r.json.assets.some((x) => x.id === inJar) && r.json.assets.every((x) => x.access === 'view' && x.collection_id === jar.id) && r.json.jar.name === 'screenshots')
+check('guest sees the shared jar', r.json.folders.length === 1 && r.json.folders[0].id === jar.id && r.json.folders[0].role === 'view' && r.json.folders[0].owner === 'dev@localhost', JSON.stringify(r.json.folders))
+r = await call('GET', `/v1/shared/folders/${jar.id}/assets`)
+check('guest can list the shared jar, read-only', r.status === 200 && r.json.assets.some((x) => x.id === inJar) && r.json.assets.every((x) => x.access === 'view' && x.collection_id === jar.id) && r.json.folder.name === 'screenshots')
+r = await call('GET', `/v1/shared/folders/${jar.id}/assets`)
+check('a shared folder shows its subfolders, and no path above itself', r.json.folders.some((f) => f.id === inner.id) && r.json.crumbs.length === 1 && r.json.crumbs[0].id === jar.id, JSON.stringify(r.json.crumbs))
+r = await call('GET', `/v1/shared/folders/${inner.id}/assets`)
+check('sharing a folder shares its subfolders', r.status === 200 && r.json.assets.some((x) => x.id === innerItem.id) && r.json.crumbs.map((c) => c.name).join('/') === 'screenshots/inner' && r.json.folder.role === 'view', JSON.stringify(r.json.crumbs ?? r.json))
+r = await call('GET', `/v1/assets/${innerItem.id}/file`)
+check('and the files inside them', r.status === 200)
 r = await call('GET', `/v1/assets/${inJar}/file`)
 check('guest can open a file in it', r.status === 200)
 r = await call('GET', '/v1/assets')
 check('guest has no library of their own', r.json.assets.length === 0)
 r = await call('GET', `/v1/assets/${outside}`)
 check('guest cannot reach items outside the jar', r.status === 404)
-r = await call('GET', `/v1/shared/jars/${otherJar.id}/assets`)
+r = await call('GET', `/v1/shared/folders/${otherJar.id}/assets`)
 check('guest cannot list a jar that was not shared', r.status === 404)
-r = await call('GET', `/v1/shared/jars/${jar.id}/assets?collection=${otherJar.id}`)
+r = await call('GET', `/v1/shared/folders/${jar.id}/assets?collection=${otherJar.id}`)
 check('query string cannot widen the listing', r.json.assets.every((x) => x.collection_id === jar.id))
 r = await call('PATCH', `/v1/assets/${inJar}`, { body: { title: 'changed' } })
 check('view cannot rename', r.status === 403)
@@ -351,7 +456,7 @@ cookie = guest.cookie
 r = await call('GET', `/v1/assets/${inJar}`)
 check('after revoking, the guest is locked out at once', r.status === 404)
 r = await call('GET', '/v1/shared')
-check('and sees nothing shared', r.json.jars.length === 0 && r.json.items.length === 0)
+check('and sees nothing shared', r.json.folders.length === 0 && r.json.items.length === 0)
 r = await signInAs('guest@example.com')
 check('and cannot sign in again', r.status === 403)
 cookie = ownerCookie

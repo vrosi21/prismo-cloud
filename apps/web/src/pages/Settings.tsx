@@ -1,19 +1,18 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, type Collection, type Me, type Token, type Visibility } from '../api'
+import { api, type Me, type Token, type Visibility } from '../api'
 import { copyText, when } from '../lib/format'
 import { errorText, log } from '../lib/log'
-import { useCollections, useTokens } from '../lib/queries'
+import { useTokens } from '../lib/queries'
 import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/theme'
 
 export function Settings({ me }: { me: Me }) {
   return (
     <div className="h-full overflow-y-auto px-2 pt-2">
-      <div className="mx-auto flex max-w-[860px] flex-col gap-6 pb-8">
+      <div className="mx-auto flex max-w-[900px] flex-col gap-6 pb-8">
         <Look />
-        {/* Tokens and jars belong to a library; a guest has none. */}
+        {/* Tokens belong to a library; a guest has none. */}
         {me.member && <CaptureClients publicUrl={me.public_url} />}
-        {me.member && <Jars />}
         <Account email={me.user.email} />
       </div>
     </div>
@@ -50,20 +49,32 @@ function Look() {
   )
 }
 
+const SCOPE_TEXT: Record<Token['scope'], string> = {
+  upload: 'may add files',
+  device: 'may add and look',
+  full: 'may do everything',
+}
+
+const VISIBILITY_TEXT: Record<Visibility, string> = {
+  private: 'private',
+  unlisted: 'anyone with link',
+  public: 'public',
+}
+
 type LinkKind = 'url' | 'gif_url' | 'share_url'
 
 // A ShareX "custom uploader" file. Importing it makes ShareX send every
-// capture here and put the returned link on the clipboard.
-function sharexConfig(publicUrl: string, secret: string, jar: string, link: LinkKind) {
+// capture here.
+function sharexConfig(publicUrl: string, secret: string, folder: string, link: LinkKind) {
   return {
     Version: '17.0.0',
-    Name: jar ? `Prismo Cloud (${jar})` : 'Prismo Cloud',
+    Name: folder ? `Prismo Cloud (${folder})` : 'Prismo Cloud',
     DestinationType: 'ImageUploader, FileUploader',
     RequestMethod: 'POST',
     RequestURL: `${publicUrl}/v1/upload`,
     Headers: { Authorization: `Bearer ${secret}` },
     Body: 'MultipartFormData',
-    Arguments: jar ? { source: 'sharex', collection: jar } : { source: 'sharex' },
+    Arguments: folder ? { source: 'sharex', collection: folder } : { source: 'sharex' },
     FileFormName: 'file',
     URL: `{json:${link}}`,
     ThumbnailURL: '{json:thumb_url}',
@@ -85,25 +96,35 @@ function CaptureClients({ publicUrl }: { publicUrl: string }) {
   const { data: tokens = [] } = useTokens()
   const [name, setName] = useState('')
   const [scope, setScope] = useState<Token['scope']>('upload')
-  const [visibility, setVisibility] = useState<Visibility>('unlisted')
+  const [visibility, setVisibility] = useState<Visibility>('private')
   const [fresh, setFresh] = useState<{ token: Token; secret: string } | null>(null)
+  const changed = () => void qc.invalidateQueries({ queryKey: ['tokens'] })
+  const fail = (e: unknown) => log('err', errorText(e))
 
   const create = useMutation({
     mutationFn: () => api.createToken(name.trim(), scope, visibility),
     onSuccess: (res) => {
       setFresh(res)
       setName('')
-      void qc.invalidateQueries({ queryKey: ['tokens'] })
+      changed()
     },
-    onError: (e) => log('err', errorText(e)),
+    onError: fail,
+  })
+  const update = useMutation({
+    mutationFn: (v: { id: string; default_visibility: Visibility }) => api.updateToken(v.id, { default_visibility: v.default_visibility }),
+    onSuccess: (t) => {
+      log('ok', `files from "${t.name}" will be ${VISIBILITY_TEXT[t.default_visibility]}`)
+      changed()
+    },
+    onError: fail,
   })
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteToken(id),
     onSuccess: () => {
       log('ok', 'token revoked')
-      void qc.invalidateQueries({ queryKey: ['tokens'] })
+      changed()
     },
-    onError: (e) => log('err', errorText(e)),
+    onError: fail,
   })
 
   const submit = (e: FormEvent) => {
@@ -112,9 +133,13 @@ function CaptureClients({ publicUrl }: { publicUrl: string }) {
   }
 
   return (
-    <Section title="capture clients">
+    <Section title="programs that upload for you">
       <p className="dim">
-        &gt; a token lets a program upload for you. give each program its own, so one can be revoked without touching the others.
+        &gt; a token lets a program (sharex, the folder watcher) send files here. give each program its own, so one can be revoked without
+        touching the others.
+        <br />
+        &gt; "new files" is what happens to a file that program sends: private stays with you; anyone with link can be opened by whoever
+        gets the link.
       </p>
 
       {fresh && <FreshToken publicUrl={publicUrl} secret={fresh.secret} name={fresh.token.name} onDone={() => setFresh(null)} />}
@@ -122,12 +147,22 @@ function CaptureClients({ publicUrl }: { publicUrl: string }) {
       {tokens.length > 0 && (
         <ul className="flex flex-col gap-1">
           {tokens.map((t) => (
-            <li key={t.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-panel-2 px-3 py-1">
-              <span className="truncate">
-                {t.name} <span className="dim">· {t.scope === 'upload' ? 'upload only' : 'full access'} · new files {t.default_visibility}</span>
+            <li key={t.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-panel-2 px-3 py-1">
+              <span className="min-w-0 truncate">
+                {t.name} <span className="dim">· {SCOPE_TEXT[t.scope]} · {t.last_used_at ? `used ${when(t.last_used_at)}` : 'never used'}</span>
               </span>
-              <span className="flex items-center gap-4">
-                <span className="dim">{t.last_used_at ? `used ${when(t.last_used_at)}` : 'never used'}</span>
+              <span className="flex items-center gap-3">
+                <span className="dim">new files:</span>
+                <select
+                  className="field !w-auto"
+                  value={t.default_visibility}
+                  aria-label={`what happens to new files from ${t.name}`}
+                  onChange={(e) => update.mutate({ id: t.id, default_visibility: e.target.value as Visibility })}
+                >
+                  <option value="private">private</option>
+                  <option value="unlisted">anyone with link</option>
+                  <option value="public">public</option>
+                </select>
                 <button type="button" className="chip" disabled={remove.isPending} onClick={() => remove.mutate(t.id)}>
                   revoke
                 </button>
@@ -143,17 +178,18 @@ function CaptureClients({ publicUrl }: { publicUrl: string }) {
           <input className="field" value={name} maxLength={80} placeholder="sharex on my pc" onChange={(e) => setName(e.target.value)} />
         </label>
         <label>
-          <span className="label">may</span>
+          <span className="label">it may</span>
           <select className="field" value={scope} onChange={(e) => setScope(e.target.value as Token['scope'])}>
-            <option value="upload">upload only</option>
-            <option value="full">everything</option>
+            <option value="upload">add files</option>
+            <option value="device">add files and look</option>
+            <option value="full">do everything</option>
           </select>
         </label>
         <label>
           <span className="label">new files are</span>
           <select className="field" value={visibility} onChange={(e) => setVisibility(e.target.value as Visibility)}>
-            <option value="unlisted">unlisted</option>
             <option value="private">private</option>
+            <option value="unlisted">anyone with link</option>
             <option value="public">public</option>
           </select>
         </label>
@@ -166,7 +202,7 @@ function CaptureClients({ publicUrl }: { publicUrl: string }) {
 }
 
 function FreshToken({ publicUrl, secret, name, onDone }: { publicUrl: string; secret: string; name: string; onDone: () => void }) {
-  const [jar, setJar] = useState('screenshots')
+  const [folder, setFolder] = useState('screenshots')
   const [link, setLink] = useState<LinkKind>('url')
   const copy = async (label: string, text: string) => {
     const ok = await copyText(text)
@@ -184,11 +220,11 @@ function FreshToken({ publicUrl, secret, name, onDone }: { publicUrl: string; se
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label>
-          <span className="label">sharex: put captures in jar</span>
-          <input className="field" value={jar} maxLength={60} onChange={(e) => setJar(e.target.value)} />
+          <span className="label">sharex: put captures in folder</span>
+          <input className="field" value={folder} maxLength={200} placeholder="screenshots or screenshots/2026" onChange={(e) => setFolder(e.target.value)} />
         </label>
         <label>
-          <span className="label">sharex: link put on clipboard</span>
+          <span className="label">sharex: link it gets back</span>
           <select className="field" value={link} onChange={(e) => setLink(e.target.value as LinkKind)}>
             <option value="url">the file itself</option>
             <option value="gif_url">gif version of recordings</option>
@@ -196,6 +232,7 @@ function FreshToken({ publicUrl, secret, name, onDone }: { publicUrl: string; se
           </select>
         </label>
       </div>
+      <p className="dim -mt-2 text-[17px]">&gt; a link to a private file opens only for you, until you share that file.</p>
 
       <div className="flex flex-wrap gap-x-3 gap-y-4">
         <button type="button" className="btn" onClick={() => copy('token', secret)}>
@@ -204,7 +241,7 @@ function FreshToken({ publicUrl, secret, name, onDone }: { publicUrl: string; se
         <button
           type="button"
           className="btn btn-accent"
-          onClick={() => download(`prismo-${jar.trim() || 'cloud'}.sxcu`, JSON.stringify(sharexConfig(publicUrl, secret, jar.trim(), link), null, 2))}
+          onClick={() => download(`prismo-${folder.trim().replace(/[^a-z0-9]+/gi, '-') || 'cloud'}.sxcu`, JSON.stringify(sharexConfig(publicUrl, secret, folder.trim(), link), null, 2))}
         >
           download sharex config
         </button>
@@ -221,67 +258,6 @@ function FreshToken({ publicUrl, secret, name, onDone }: { publicUrl: string; se
         </button>
       </div>
     </div>
-  )
-}
-
-function Jars() {
-  const qc = useQueryClient()
-  const { data: collections = [] } = useCollections()
-  const changed = () => void qc.invalidateQueries({ queryKey: ['collections'] })
-
-  const rename = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => api.renameCollection(id, name),
-    onSuccess: changed,
-    onError: (e) => {
-      log('err', errorText(e))
-      changed()
-    },
-  })
-  const remove = useMutation({
-    mutationFn: (id: string) => api.deleteCollection(id),
-    onSuccess: () => {
-      log('ok', 'jar removed; its items were kept')
-      changed()
-      void qc.invalidateQueries({ queryKey: ['assets'] })
-    },
-    onError: (e) => log('err', errorText(e)),
-  })
-
-  return (
-    <Section title="pickle jars">
-      <p className="dim">&gt; removing a jar keeps what was in it.</p>
-      <ul className="flex flex-col gap-3">
-        {collections.map((c) => (
-          <JarRow key={c.id} jar={c} onRename={(name) => rename.mutate({ id: c.id, name })} onRemove={() => remove.mutate(c.id)} />
-        ))}
-      </ul>
-    </Section>
-  )
-}
-
-function JarRow({ jar, onRename, onRemove }: { jar: Collection; onRename: (name: string) => void; onRemove: () => void }) {
-  const [name, setName] = useState(jar.name)
-  const commit = () => {
-    const next = name.trim()
-    if (next && next !== jar.name) onRename(next)
-    else setName(jar.name)
-  }
-  return (
-    <li className="flex items-center gap-4">
-      <input
-        className="field"
-        value={name}
-        maxLength={60}
-        aria-label={`name of jar ${jar.name}`}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-      />
-      <span className="dim w-[90px] shrink-0 text-right">{jar.count} items</span>
-      <button type="button" className="chip shrink-0" onClick={onRemove}>
-        remove
-      </button>
-    </li>
   )
 }
 

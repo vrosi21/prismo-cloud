@@ -119,31 +119,74 @@ func (s *Store) InviteByToken(ctx context.Context, token string) (Invite, error)
 }
 
 // ShareRole says what an account may do with an asset it does not own:
-// "" (nothing), RoleView or RoleEdit. A share on the asset itself and a share
-// on its jar both count; the stronger one wins.
+// "" (nothing), RoleView or RoleEdit. A share on the asset itself counts, and
+// so does a share on its folder or on any folder above that one: sharing a
+// folder shares everything inside it. The strongest of them wins.
 func (s *Store) ShareRole(ctx context.Context, email, assetID string, collectionID *string) (string, error) {
 	var level int
 	err := s.Pool.QueryRow(ctx,
-		`select coalesce(max(case role when 'edit' then 2 else 1 end), 0) from shares
-		 where email_key = $1 and (asset_id = $2 or ($3::uuid is not null and collection_id = $3))`,
+		`with recursive up as (
+		     select id, parent_id from collections where id = $3
+		     union all
+		     select c.id, c.parent_id from collections c join up on c.id = up.parent_id)
+		 select coalesce(max(case role when 'edit' then 2 else 1 end), 0) from shares
+		 where email_key = $1 and (asset_id = $2 or collection_id in (select id from up))`,
 		email, assetID, collectionID).Scan(&level)
 	return [...]string{"", RoleView, RoleEdit}[level], err
 }
 
-// CollectionShare returns the role an account has on a jar, with the jar's
-// owner and name. role is "" when the jar is not shared with that account.
-func (s *Store) CollectionShare(ctx context.Context, email, collectionID string) (role, ownerID, name string, err error) {
-	err = s.Pool.QueryRow(ctx,
-		`select s.role, s.owner_id::text, c.name from shares s
-		 join collections c on c.id = s.collection_id
-		 where s.email_key = $1 and s.collection_id = $2`, email, collectionID).Scan(&role, &ownerID, &name)
-	if err == pgx.ErrNoRows {
-		return "", "", "", nil
-	}
-	return role, ownerID, name, err
+// Crumb is one step of the path to a folder.
+type Crumb struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
-type SharedJar struct {
+// FolderAccess is what an account may do with a folder it does not own.
+type FolderAccess struct {
+	Role    string // "" when the folder is not shared with the account
+	OwnerID string
+	Name    string
+	// Crumbs is the path the account may walk: from the topmost folder that
+	// was shared with it down to this one. Folders above that stay unseen.
+	Crumbs []Crumb
+}
+
+// FolderAccess works out an account's rights on a folder. The folder may be
+// shared itself or lie inside a shared folder.
+func (s *Store) FolderAccess(ctx context.Context, email, collectionID string) (FolderAccess, error) {
+	rows, err := s.Pool.Query(ctx,
+		`with recursive up as (
+		     select c.id, c.parent_id, c.name, c.owner_id, 0 as dist from collections c where c.id = $2
+		     union all
+		     select c.id, c.parent_id, c.name, c.owner_id, up.dist + 1
+		     from collections c join up on c.id = up.parent_id)
+		 select up.id::text, up.name, up.owner_id::text,
+		        coalesce((select s.role from shares s where s.email_key = $1 and s.collection_id = up.id), '')
+		 from up order by up.dist desc`, email, collectionID)
+	if err != nil {
+		return FolderAccess{}, err
+	}
+	defer rows.Close()
+	var fa FolderAccess
+	for rows.Next() { // from the top of the tree down to the folder asked about
+		var c Crumb
+		var role string
+		if err := rows.Scan(&c.ID, &c.Name, &fa.OwnerID, &role); err != nil {
+			return FolderAccess{}, err
+		}
+		if role == RoleEdit || (role == RoleView && fa.Role == "") {
+			fa.Role = role
+		}
+		if fa.Role != "" {
+			fa.Crumbs = append(fa.Crumbs, c)
+		}
+		fa.Name = c.Name
+	}
+	return fa, rows.Err()
+}
+
+// SharedFolder is a folder someone shared with the account directly.
+type SharedFolder struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Role  string `json:"role"`
@@ -151,7 +194,7 @@ type SharedJar struct {
 	Count int    `json:"count"`
 }
 
-func (s *Store) SharedJars(ctx context.Context, email string) ([]SharedJar, error) {
+func (s *Store) SharedFolders(ctx context.Context, email string) ([]SharedFolder, error) {
 	rows, err := s.Pool.Query(ctx,
 		`select c.id::text, c.name, s.role, u.email,
 		        (select count(*) from assets a
@@ -165,13 +208,13 @@ func (s *Store) SharedJars(ctx context.Context, email string) ([]SharedJar, erro
 		return nil, err
 	}
 	defer rows.Close()
-	out := []SharedJar{}
+	out := []SharedFolder{}
 	for rows.Next() {
-		var j SharedJar
-		if err := rows.Scan(&j.ID, &j.Name, &j.Role, &j.Owner, &j.Count); err != nil {
+		var f SharedFolder
+		if err := rows.Scan(&f.ID, &f.Name, &f.Role, &f.Owner, &f.Count); err != nil {
 			return nil, err
 		}
-		out = append(out, j)
+		out = append(out, f)
 	}
 	return out, rows.Err()
 }

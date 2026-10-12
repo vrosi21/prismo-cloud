@@ -10,7 +10,7 @@ import { useMe } from './lib/queries'
 import { Library } from './pages/Library'
 import { Login } from './pages/Login'
 import { Settings } from './pages/Settings'
-import { SharedHome, SharedItems, SharedJar } from './pages/Shared'
+import { SharedFolderPage, SharedHome, SharedItems } from './pages/Shared'
 
 // After signing in from an invitation link: go straight to what was shared.
 // Only if it really is shared with this account; the owner opening their own
@@ -23,8 +23,8 @@ function InviteLanding() {
     forgetInvite()
     void Promise.all([api.invite(token), api.shared()])
       .then(([invite, shared]) => {
-        if (invite.collection_id && shared.jars.some((j) => j.id === invite.collection_id)) {
-          navigate(`/shared/jar/${invite.collection_id}`, { replace: true })
+        if (invite.collection_id && shared.folders.some((f) => f.id === invite.collection_id)) {
+          navigate(`/shared/folder/${invite.collection_id}`, { replace: true })
         } else if (invite.asset_id && shared.items.some((i) => i.id === invite.asset_id)) {
           navigate('/shared/items', { replace: true })
         }
@@ -59,7 +59,7 @@ export function App() {
           <InviteLanding />
           <Routes>
             <Route path="/" element={member ? <Library /> : <SharedHome />} />
-            <Route path="/shared/jar/:id" element={<SharedJar />} />
+            <Route path="/shared/folder/:id" element={<SharedFolderPage />} />
             <Route path="/shared/items" element={<SharedItems />} />
             {member && <Route path="/trash" element={<Library trashed />} />}
             <Route path="/settings" element={<Settings me={me.data} />} />

@@ -39,7 +39,7 @@ type uploadOptions struct {
 	Visibility   string
 	Kind         string
 	Source       string
-	Collection   string  // by name, created when missing
+	Collection   string  // by path such as "screenshots/2026", created when missing
 	CollectionID *string // by id
 
 	// Filled in by resolve.
@@ -94,26 +94,28 @@ func (s *Server) resolve(ctx context.Context, p *principal, o *uploadOptions) (m
 			// Not the caller's jar. It may be one shared with them for editing:
 			// then the file goes into the jar owner's library, private, and
 			// nothing about how it is shared is the uploader's to choose.
-			role, ownerID, _, err := s.store.CollectionShare(ctx, p.shareKey(), *o.CollectionID)
+			access, err := s.store.FolderAccess(ctx, p.shareKey(), *o.CollectionID)
 			if err != nil {
 				return "", err
 			}
-			if role != store.RoleEdit {
+			if access.Role != store.RoleEdit {
 				return "no such collection", nil
 			}
-			o.OwnerID, o.Shared = ownerID, true
+			o.OwnerID, o.Shared = access.OwnerID, true
 			o.Visibility, o.Kind, o.Source = "private", "file", "guest"
 		}
 	} else if !p.Member {
-		return "guests can only add files to a jar shared with them", nil
-	} else if name, ok := cleanName(o.Collection); ok {
-		c, err := s.store.CollectionByName(ctx, p.UserID, name)
+		return "guests can only add files to a folder shared with them", nil
+	} else if strings.TrimSpace(o.Collection) != "" {
+		path, ok := cleanPath(o.Collection)
+		if !ok {
+			return "bad folder path", nil
+		}
+		c, err := s.store.CollectionByPath(ctx, p.UserID, path)
 		if err != nil {
 			return "", err
 		}
 		o.CollectionID = &c.ID
-	} else if strings.TrimSpace(o.Collection) != "" {
-		return "collection name is too long", nil
 	}
 	return "", nil
 }

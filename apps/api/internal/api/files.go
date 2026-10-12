@@ -135,7 +135,7 @@ func (s *Server) canView(r *http.Request, a store.Asset) bool {
 		return true
 	}
 	p, err := s.authenticate(r)
-	if err != nil || p == nil || p.Level < levelFull {
+	if err != nil || p == nil || p.Level < levelDevice {
 		return false
 	}
 	if p.UserID == a.OwnerID {

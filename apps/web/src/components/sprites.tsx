@@ -113,3 +113,14 @@ export function Blocks({ value }: { value: number }) {
     </span>
   )
 }
+
+// A folder, on a 14x11 grid.
+export function FolderIcon({ scale = 2 }: { scale?: number }) {
+  return (
+    <svg viewBox="0 0 14 11" width={14 * scale} height={11 * scale} shapeRendering="crispEdges" className="sprite shrink-0" aria-hidden>
+      <path fill="var(--line)" d="M1 0h5v1h1v1h6v1h1v7h-1v1H1v-1H0V1h1z" />
+      <path fill="var(--accent)" d="M1 1h4v1h1v1h7v7H1z" />
+      <path fill="var(--panel-2)" d="M1 4h12v6H1z" />
+    </svg>
+  )
+}

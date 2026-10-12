@@ -15,7 +15,8 @@ let signedIn = false
 let seq = 0
 const uuid = () => `00000000-0000-7000-8000-${String(++seq).padStart(12, '0')}`
 
-const collections = ['screenshots', 'gifs', 'stickers'].map((name) => ({ id: uuid(), name, created_at: new Date().toISOString() }))
+const collections = ['screenshots', 'gifs', 'stickers'].map((name) => ({ id: uuid(), name, parent_id: null, created_at: new Date().toISOString() }))
+collections.push({ id: uuid(), name: '2026', parent_id: collections[0].id, created_at: new Date().toISOString() })
 const tokens = []
 const shares = []
 const KINDS = ['image', 'image', 'image', 'gif', 'video', 'sticker', 'file']
@@ -159,19 +160,23 @@ const routes = [
     collections: collections.map((c) => ({ ...c, count: assets.filter((a) => a.collection_id === c.id && !a.deleted_at).length })),
   }]],
   ['POST', /^\/v1\/collections$/, async (req) => {
-    const c = { id: uuid(), name: (await body(req)).name, created_at: new Date().toISOString() }
+    const sent = await body(req)
+    const c = { id: uuid(), name: sent.name, parent_id: sent.parent_id ?? null, created_at: new Date().toISOString() }
     collections.push(c)
     return [201, { ...c, count: 0 }]
   }],
   ['PATCH', /^\/v1\/collections\/([^/]+)$/, async (req, m) => {
-    collections.find((c) => c.id === m[1]).name = (await body(req)).name
+    const sent = await body(req)
+    const c = collections.find((x) => x.id === m[1])
+    if (sent.name) c.name = sent.name
+    if ('parent_id' in sent) c.parent_id = sent.parent_id
     return [204]
   }],
   ['DELETE', /^\/v1\/collections\/([^/]+)$/, (req, m) => {
     collections.splice(collections.findIndex((c) => c.id === m[1]), 1)
     return [204]
   }],
-  ['GET', /^\/v1\/shared$/, () => [200, { jars: [], items: [] }]],
+  ['GET', /^\/v1\/shared$/, () => [200, { folders: [], items: [] }]],
   ['GET', /^\/v1\/shares$/, () => [200, { shares }]],
   ['POST', /^\/v1\/shares$/, async (req) => {
     const share = { id: uuid(), collection_id: null, asset_id: null, ...(await body(req)), created_at: new Date().toISOString(), invite_url: `${PUBLIC}/?invite=${'m'.repeat(40)}` }

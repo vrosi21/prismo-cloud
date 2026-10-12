@@ -11,7 +11,11 @@ export interface UploadItem {
 }
 
 export interface UploadOptions {
+  /** Folder to put the file in, by id. */
   collectionId?: string | null
+  /** Or by path such as "stickers"; made when missing. */
+  collectionPath?: string
+  kind?: 'sticker'
   visibility?: Visibility
   onStored?: (asset: Asset) => void
 }
@@ -65,6 +69,8 @@ async function uploadOne(id: number, file: File, opts: UploadOptions) {
       bytes: file.size,
       sha256,
       collection_id: opts.collectionId ?? undefined,
+      collection: opts.collectionPath,
+      kind: opts.kind,
       visibility: opts.visibility,
     })
     if (ticket.duplicate || !ticket.upload) {
@@ -87,7 +93,7 @@ async function uploadOne(id: number, file: File, opts: UploadOptions) {
       asset = await postThroughApi(file, name, opts, (p) => patch(id, { progress: p }))
     }
     patch(id, { state: 'done', progress: 1 })
-    log('ok', `wish granted: ${name}`)
+    log('ok', `uploaded: ${name}`)
     opts.onStored?.(asset)
   } catch (e) {
     patch(id, { state: 'error', error: errorText(e) })
@@ -132,6 +138,8 @@ function put(url: string, file: File, onProgress: (p: number) => void) {
 async function postThroughApi(file: File, name: string, opts: UploadOptions, onProgress: (p: number) => void) {
   const form = new FormData()
   if (opts.visibility) form.set('visibility', opts.visibility)
+  if (opts.collectionPath) form.set('collection', opts.collectionPath)
+  if (opts.kind) form.set('kind', opts.kind)
   form.set('file', file, name)
   const xhr = new XMLHttpRequest()
   const collection = opts.collectionId ? `?collection_id=${opts.collectionId}` : ''

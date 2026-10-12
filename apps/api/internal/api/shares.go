@@ -189,17 +189,17 @@ func (s *Server) inviteInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, in)
 }
 
-// sharedWithMe lists what other people shared with the caller: whole jars,
+// sharedWithMe lists what other people shared with the caller: whole folders,
 // and items shared on their own.
 func (s *Server) sharedWithMe(w http.ResponseWriter, r *http.Request) {
 	type sharedItem struct {
 		assetView
 		Owner string `json:"owner"`
 	}
-	jars, items := []store.SharedJar{}, []sharedItem{}
+	folders, items := []store.SharedFolder{}, []sharedItem{}
 	if key := who(r).shareKey(); key != "" {
 		var err error
-		if jars, err = s.store.SharedJars(r.Context(), key); err != nil {
+		if folders, err = s.store.SharedFolders(r.Context(), key); err != nil {
 			serverError(w, r, err)
 			return
 		}
@@ -216,30 +216,41 @@ func (s *Server) sharedWithMe(w http.ResponseWriter, r *http.Request) {
 			items = append(items, sharedItem{assetView: s.viewAs(sa.Asset, level), Owner: sa.Owner})
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"jars": jars, "items": items})
+	writeJSON(w, http.StatusOK, map[string]any{"folders": folders, "items": items})
 }
 
-// sharedJarAssets pages through a jar that was shared with the caller.
-func (s *Server) sharedJarAssets(w http.ResponseWriter, r *http.Request) {
+// sharedFolderAssets shows a folder that was shared with the caller, or a
+// folder inside one: its subfolders, the path back up to the shared folder,
+// and one page of its files.
+func (s *Server) sharedFolderAssets(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
 		return
 	}
-	role, ownerID, name, err := s.store.CollectionShare(r.Context(), who(r).shareKey(), id)
+	access, err := s.store.FolderAccess(r.Context(), who(r).shareKey(), id)
 	if err != nil {
 		serverError(w, r, err)
 		return
 	}
-	if role == "" {
+	if access.Role == "" {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
+	subfolders, err := s.store.ChildCollections(r.Context(), id)
+	if err != nil {
+		serverError(w, r, err)
+		return
+	}
 	level := accessView
-	if role == store.RoleEdit {
+	if access.Role == store.RoleEdit {
 		level = accessEdit
 	}
-	// Owner and jar come from the share, so the caller cannot widen the
+	// Owner and folder come from the share, so the caller cannot widen the
 	// listing to the rest of the owner's library.
-	f := store.AssetFilter{OwnerID: ownerID, CollectionID: id}
-	s.writeAssetPage(w, r, f, level, map[string]any{"jar": map[string]string{"id": id, "name": name, "role": role}})
+	f := store.AssetFilter{OwnerID: access.OwnerID, CollectionID: id}
+	s.writeAssetPage(w, r, f, level, map[string]any{
+		"folder":  map[string]string{"id": id, "name": access.Name, "role": access.Role},
+		"crumbs":  access.Crumbs,
+		"folders": subfolders,
+	})
 }

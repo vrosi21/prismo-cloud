@@ -26,9 +26,10 @@ import (
 // Access levels, lowest to highest. A capture client gets an upload-only
 // token, so a leaked ShareX config cannot read or delete the library.
 const (
-	levelUpload  = 1 // API token with scope "upload"
-	levelFull    = 2 // API token with scope "full"
-	levelSession = 3 // logged-in browser
+	levelUpload  = 1 // API token with scope "upload": may add files
+	levelDevice  = 2 // API token with scope "device": may also look
+	levelFull    = 3 // API token with scope "full": may also change and delete
+	levelSession = 4 // logged-in browser
 )
 
 const sessionCookie = "prismo_session"
@@ -77,27 +78,33 @@ func (s *Server) Router() http.Handler {
 			r.Post("/assets/{id}/complete", s.completeAsset)
 		})
 
+		// Looking: a browser, or a program on the owner's computer.
 		r.Group(func(r chi.Router) {
-			r.Use(s.require(levelFull))
+			r.Use(s.require(levelDevice))
 			r.Get("/me", s.me)
 			r.Get("/stats", s.stats)
 			r.Get("/tags", s.tags)
 			r.Get("/assets", s.listAssets)
 			r.Get("/assets/{id}", s.getAsset)
-			r.Patch("/assets/{id}", s.updateAsset)
-			r.Delete("/assets/{id}", s.deleteAsset)
-			r.Post("/assets/{id}/restore", s.restoreAsset)
 			r.Get("/assets/{id}/file", s.assetFile)
 			r.Get("/collections", s.listCollections)
 			r.Get("/shared", s.sharedWithMe)
-			r.Get("/shared/jars/{id}/assets", s.sharedJarAssets)
+			r.Get("/shared/folders/{id}/assets", s.sharedFolderAssets)
+		})
+
+		// Changing and deleting.
+		r.Group(func(r chi.Router) {
+			r.Use(s.require(levelFull))
+			r.Patch("/assets/{id}", s.updateAsset)
+			r.Delete("/assets/{id}", s.deleteAsset)
+			r.Post("/assets/{id}/restore", s.restoreAsset)
 
 			// A guest has no library of their own to organise.
 			r.Group(func(r chi.Router) {
 				r.Use(s.memberOnly)
 				r.Post("/assets/bulk", s.bulkAssets)
 				r.Post("/collections", s.createCollection)
-				r.Patch("/collections/{id}", s.renameCollection)
+				r.Patch("/collections/{id}", s.updateCollection)
 				r.Delete("/collections/{id}", s.deleteCollection)
 			})
 		})
@@ -108,6 +115,7 @@ func (s *Server) Router() http.Handler {
 			r.Use(s.require(levelSession), s.memberOnly)
 			r.Get("/tokens", s.listTokens)
 			r.Post("/tokens", s.createToken)
+			r.Patch("/tokens/{id}", s.updateToken)
 			r.Delete("/tokens/{id}", s.deleteToken)
 			r.Get("/shares", s.listShares)
 			r.Post("/shares", s.createShare)
@@ -157,7 +165,10 @@ func (s *Server) authenticate(r *http.Request) (*principal, error) {
 			return nil, err
 		}
 		level := levelUpload
-		if t.Scope == "full" {
+		switch t.Scope {
+		case "device":
+			level = levelDevice
+		case "full":
 			level = levelFull
 		}
 		// Only members can mint tokens, so a token always speaks for one.

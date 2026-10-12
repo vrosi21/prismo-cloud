@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { api, type Asset, type AssetPatch, type BulkAction, type Collection, type Visibility } from '../api'
+import { api, type Asset, type AssetPatch, type BulkAction, type Visibility } from '../api'
+import type { FolderNode } from '../lib/folders'
 import { bytes, copyImage, copyText, displayName, duration, when } from '../lib/format'
 import { errorText, log } from '../lib/log'
 import { useRefreshLibrary } from '../lib/queries'
@@ -8,7 +9,8 @@ import { ShareDialog } from './ShareDialog'
 
 interface Props {
   asset: Asset
-  collections: Collection[]
+  /** Folders the file can be moved to, with their paths. */
+  folders: FolderNode[]
   onClose: () => void
   onStep: (direction: 1 | -1) => void
 }
@@ -19,7 +21,7 @@ const VISIBILITY_HINT: Record<Visibility, string> = {
   public: 'anyone, and may be indexed',
 }
 
-export function AssetModal({ asset, collections, onClose, onStep }: Props) {
+export function AssetModal({ asset, folders, onClose, onStep }: Props) {
   // Scanlines are chrome; switch them off while a picture is being looked at.
   useEffect(() => {
     document.documentElement.dataset.viewer = 'open'
@@ -53,7 +55,7 @@ export function AssetModal({ asset, collections, onClose, onStep }: Props) {
           </button>
         </div>
         {/* key: a fresh form per asset, so typed text never leaks to the next one */}
-        <Details key={asset.id} asset={asset} collections={collections} onClose={onClose} />
+        <Details key={asset.id} asset={asset} folders={folders} onClose={onClose} />
       </div>
     </div>
   )
@@ -84,7 +86,7 @@ function Preview({ asset }: { asset: Asset }) {
   return <img key={asset.id} src={asset.urls.file} alt={displayName(asset)} className="max-h-[78vh] max-w-full object-contain" />
 }
 
-function Details({ asset, collections, onClose }: { asset: Asset; collections: Collection[]; onClose: () => void }) {
+function Details({ asset, folders, onClose }: { asset: Asset; folders: FolderNode[]; onClose: () => void }) {
   const refresh = useRefreshLibrary()
   const [title, setTitle] = useState(asset.title)
   const [tags, setTags] = useState(asset.tags.join(', '))
@@ -198,12 +200,12 @@ function Details({ asset, collections, onClose }: { asset: Asset; collections: C
         <>
           <div className="grid grid-cols-2 gap-4">
             <label>
-              <span className="label">pickle jar</span>
+              <span className="label">folder</span>
               <select className="field" value={asset.collection_id ?? ''} onChange={(e) => save.mutate({ collection_id: e.target.value || null })}>
-                <option value="">none</option>
-                {collections.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+                <option value="">none (top level)</option>
+                {folders.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.path}
                   </option>
                 ))}
               </select>
@@ -273,7 +275,7 @@ function Details({ asset, collections, onClose }: { asset: Asset; collections: C
           )
         ) : confirmPurge ? (
           <>
-            <p className="w-full text-danger">&gt; careful: this wish cannot be unwished.</p>
+            <p className="w-full text-danger">&gt; careful: this cannot be undone.</p>
             <button type="button" className="btn btn-danger" disabled={bulk.isPending} onClick={() => bulk.mutate({ action: 'purge' })}>
               delete forever
             </button>

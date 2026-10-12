@@ -161,9 +161,12 @@ type AssetFilter struct {
 	Limit        int
 }
 
-func (s *Store) ListAssets(ctx context.Context, f AssetFilter) ([]Asset, error) {
-	conds := []string{"a.owner_id = $1", "a.status <> 'pending'"}
-	args := []any{f.OwnerID}
+// where turns the filter into SQL conditions. Paging (cursor, limit) is left
+// to the caller, so listing rows and listing bare ids share one definition of
+// "what matches".
+func (f AssetFilter) where() (conds []string, args []any) {
+	conds = []string{"a.owner_id = $1", "a.status <> 'pending'"}
+	args = []any{f.OwnerID}
 	add := func(cond string, v any) {
 		args = append(args, v)
 		conds = append(conds, fmt.Sprintf(cond, len(args)))
@@ -187,8 +190,29 @@ func (s *Store) ListAssets(ctx context.Context, f AssetFilter) ([]Asset, error) 
 	if f.Query != "" {
 		add("(a.title ilike $%[1]d or a.filename ilike $%[1]d)", "%"+escapeLike(f.Query)+"%")
 	}
+	return conds, args
+}
+
+// ListAssetIDs returns the ids of everything the filter matches, newest
+// first, at most limit of them. "Select all" needs the ids of rows that have
+// not been loaded onto the screen yet.
+func (s *Store) ListAssetIDs(ctx context.Context, f AssetFilter, limit int) ([]string, error) {
+	conds, args := f.where()
+	args = append(args, limit)
+	rows, err := s.Pool.Query(ctx,
+		`select a.id::text from assets a where `+strings.Join(conds, " and ")+
+			fmt.Sprintf(" order by a.id desc limit $%d", len(args)), args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+func (s *Store) ListAssets(ctx context.Context, f AssetFilter) ([]Asset, error) {
+	conds, args := f.where()
 	if f.Cursor != "" {
-		add("a.id < $%d", f.Cursor)
+		args = append(args, f.Cursor)
+		conds = append(conds, fmt.Sprintf("a.id < $%d", len(args)))
 	}
 	args = append(args, f.Limit)
 	sql := `select ` + assetCols + ` from assets a where ` + strings.Join(conds, " and ") +
@@ -276,6 +300,9 @@ func (s *Store) UpdateAsset(ctx context.Context, ownerID, id string, p AssetPatc
 	}
 	if p.SetCollection {
 		set("collection_id", p.CollectionID)
+		if p.Kind == nil {
+			sets = append(sets, fmt.Sprintf("kind = "+stickerIfInStickers, len(args)))
+		}
 	}
 	a, err := scanAsset(s.Pool.QueryRow(ctx,
 		`update assets a set `+strings.Join(sets, ", ")+
@@ -309,9 +336,16 @@ func (s *Store) PurgeAssets(ctx context.Context, ownerID string, ids []string) (
 	return tag.RowsAffected(), err
 }
 
+// stickerIfInStickers is the value for "kind" when an asset is put into the
+// folder given by parameter %d: a picture going into a folder called
+// "stickers" becomes a sticker, everything else keeps its kind.
+const stickerIfInStickers = `case when kind = 'image' and exists (
+		select 1 from collections c where c.id = $%[1]d and lower(c.name) = 'stickers')
+	then 'sticker' else kind end`
+
 func (s *Store) SetAssetsCollection(ctx context.Context, ownerID string, ids []string, collectionID *string) (int64, error) {
 	tag, err := s.Pool.Exec(ctx,
-		`update assets set collection_id = $3, updated_at = now()
+		`update assets set collection_id = $3, updated_at = now(), kind = `+fmt.Sprintf(stickerIfInStickers, 3)+`
 		 where owner_id = $1 and id = any($2::text[]::uuid[])`, ownerID, ids, collectionID)
 	return tag.RowsAffected(), err
 }
@@ -343,11 +377,18 @@ type Processed struct {
 }
 
 // FinishAsset records the verified file. A kind chosen by the user (sticker)
-// is kept; otherwise the detected kind wins.
+// is kept, a picture uploaded into a folder called "stickers" becomes one,
+// and otherwise the detected kind wins.
 func FinishAsset(ctx context.Context, db DBTX, id string, p Processed) error {
 	_, err := db.Exec(ctx,
 		`update assets set blob_sha = $2, mime = $3, bytes = $4, width = $5, height = $6,
-		        duration_ms = $7, kind = case when kind = 'sticker' then kind else $8 end,
+		        duration_ms = $7,
+		        kind = case
+		            when kind = 'sticker' then kind
+		            when $8 = 'image' and exists (
+		                select 1 from collections c
+		                where c.id = assets.collection_id and lower(c.name) = 'stickers') then 'sticker'
+		            else $8 end,
 		        status = 'ready', error = null, updated_at = now()
 		 where id = $1`,
 		id, p.BlobSHA, p.Mime, p.Bytes, p.Width, p.Height, p.DurationMS, p.Kind)
