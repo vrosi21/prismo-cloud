@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { useTheme } from '../lib/theme'
 import { Cube } from './sprites'
 
@@ -54,102 +54,144 @@ function Multiverse() {
   )
 }
 
-// --- Prismo's legs, seen through his own eyes --------------------------------
-// He is lying back on the Time Room floor, looking down the length of himself
-// at the far wall, feet up. Each limb is a tapered stick worked out on a coarse
-// grid, so it comes out as chunky pixels like every other sprite here.
+// --- Prismo, through his own eyes --------------------------------------------
+// Prismo is flat: a pink shape painted on the room, not a body standing in it.
+// You are him, lying on the floor and looking at the far wall. Your legs run
+// flat along the floor and, where the floor meets the wall, fold and carry on
+// straight up it, feet and all. Worked out for the screen's own size on a grid
+// of big pixels, like every other sprite here.
 
-const LEGS_W = 160
-const LEGS_H = 80
+// These must match the room TimeRoom draws, as shares of the screen.
+const SEAM = 0.74 // where the floor meets the back wall
+const WALL = { left: 0.24, right: 0.76, top: 0.16 }
+// Where the floor's side edges would meet if carried on.
+const VANISH = 1 - (1 - SEAM) * (0.5 / WALL.left)
 
 type Pt = [number, number]
-type Limb = { from: Pt; to: Pt; r0: number; r1: number }
+type Cap = { a: Pt; b: Pt; r0: number; r1: number }
 
-// Where a point sits across a limb: -1 on its left edge as seen on screen,
-// 1 on its right, null if it is outside.
-function across(l: Limb, x: number, y: number): number | null {
-  const [ax, ay] = l.from
-  const dx = l.to[0] - ax
-  const dy = l.to[1] - ay
-  const len2 = dx * dx + dy * dy
-  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2))
-  const r = l.r0 + (l.r1 - l.r0) * t
-  const px = x - (ax + dx * t)
-  const py = y - (ay + dy * t)
-  if (px * px + py * py > r * r) return null
-  const side = dy > 0 ? -1 : 1
-  return (side * (py * dx - px * dy)) / Math.sqrt(len2) / r
+// A stick from a to b, r0 thick at a and r1 at b, with round ends.
+function inCap({ a, b, r0, r1 }: Cap, x: number, y: number): boolean {
+  const dx = b[0] - a[0]
+  const dy = b[1] - a[1]
+  const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy)))
+  const r = r0 + (r1 - r0) * t
+  const px = x - a[0] - dx * t
+  const py = y - a[1] - dy * t
+  return px * px + py * py <= r * r
 }
 
-// Thighs come in from below the screen, wide because they are close; the
-// shins run off towards the far wall and the feet turn out, toes up, the way
-// they do on his little sprite. Mirrored left to right.
-const mirror = ({ from, to, r0, r1 }: Limb): Limb => ({
-  from: [LEGS_W - from[0], from[1]],
-  to: [LEGS_W - to[0], to[1]],
-  r0,
-  r1,
-})
-const LEG: Limb = { from: [30, 104], to: [67, 47], r0: 20, r1: 4.2 }
-const FOOT: Limb = { from: [67, 48], to: [57, 27], r0: 4.4, r1: 7 }
-// The bottom of his body, just showing between the thighs.
-const BELLY: Limb = { from: [60, 104], to: [100, 104], r0: 27, r1: 27 }
+type Leg = { x: number; ankle: number; out: 1 | -1 }
+
+// Everything from here on is measured in grid cells. A leg is six cells wide.
+const HALF = 3
+
+// The part of a leg on the wall. Wall coordinates: x from the middle of the
+// screen, y up from the fold. The shin goes straight up; the foot leans out
+// and ends in three toes fanned out like fingers, the way it does in the show.
+function shin({ x, ankle }: Leg): Cap {
+  return { a: [x, 0], b: [x, ankle], r0: HALF, r1: HALF }
+}
+function foot({ x, ankle, out }: Leg): Cap[] {
+  const tilt = 0.6 // radians out from straight up
+  const ray = (angle: number, length: number): Pt => [out * Math.sin(angle) * length, Math.cos(angle) * length]
+  const end: Pt = [x + ray(tilt, 8)[0], ankle + ray(tilt, 8)[1]]
+  const side = ray(tilt + Math.PI / 2, 1) // one cell towards the outer edge
+  const toe = (across: number, turn: number, length: number): Cap => {
+    const a: Pt = [end[0] + side[0] * across, end[1] + side[1] * across]
+    const d = ray(tilt + turn, length)
+    return { a, b: [a[0] + d[0], a[1] + d[1]], r0: 1.7, r1: 1.4 }
+  }
+  return [
+    { a: [x, ankle], b: end, r0: HALF, r1: HALF + 0.8 },
+    toe(-2.2, -0.1, 5.6),
+    toe(0.8, 0.45, 5.2),
+    toe(3.2, 1.0, 4.4),
+  ]
+}
 
 type Run = { x: number; y: number; w: number; fill: string }
+type Painting = { cell: number; still: Run[]; tapping: Run[] }
 
-// Light from the left: the right edge of every limb sits in shade, unless one
-// flat colour is asked for. Earlier limbs are in front. Neighbouring cells of
-// one colour merge into one rect.
-function rasterize(limbs: Limb[], flat?: string): Run[] {
-  const runs: Run[] = []
-  for (let y = 0; y < LEGS_H; y++) {
-    let cur: Run | null = null
-    for (let x = 0; x < LEGS_W; x++) {
-      let fill: string | null = null
-      for (const l of limbs) {
-        const s = across(l, x + 0.5, y + 0.5)
-        if (s === null) continue
-        fill = flat ?? (s > 0.72 ? 'var(--pov-shade)' : s > 0.2 ? 'var(--accent-deep)' : 'var(--accent)')
-        break
-      }
-      if (cur && fill === cur.fill) {
-        cur.w++
+function paint(width: number, height: number): Painting {
+  const wallW = (WALL.right - WALL.left) * width
+  const wallH = (SEAM - WALL.top) * height
+  const u = Math.min(wallW, wallH)
+  const cell = Math.max(3, Math.min(6, Math.round(u / 80)))
+  const cols = Math.ceil(width / cell)
+  const rows = Math.ceil(height / cell)
+  const mid = Math.round(width / 2 / cell)
+  const seam = Math.round((SEAM * height) / cell)
+  const vanish = (VANISH * height) / cell
+  const tall = (wallH / cell) | 0
+  // One leg a little higher than the other: he is lounging, not standing.
+  const apart = Math.round((0.16 * u) / cell)
+  const legs: Leg[] = [
+    { x: -apart, ankle: Math.round(tall * 0.6), out: -1 },
+    { x: apart, ankle: Math.round(tall * 0.72), out: 1 },
+  ]
+  const still = [...legs.map(shin), ...foot(legs[0])]
+  const tapping = foot(legs[1])
+
+  const runs = { still: [] as Run[], tapping: [] as Run[] }
+  const push = (into: Run[], col: number, row: number, fill: string) => {
+    const last = into[into.length - 1]
+    if (last && last.y === row * cell && last.fill === fill && last.x + last.w === col * cell) last.w += cell
+    else into.push({ x: col * cell, y: row * cell, w: cell, fill })
+  }
+  for (let row = 0; row < rows; row++) {
+    const cy = row + 0.5
+    for (let col = 0; col < cols; col++) {
+      const cx = col + 0.5 - mid
+      if (row >= seam) {
+        // On the floor: undo the perspective and the legs are plain strips.
+        const across = cx * ((seam - vanish) / (cy - vanish))
+        if (legs.some((l) => Math.abs(across - l.x) < HALF)) push(runs.still, col, row, 'var(--pov-floor)')
       } else {
-        if (cur) runs.push(cur)
-        cur = fill ? { x, y, w: 1, fill } : null
+        const wy = seam - cy
+        if (still.some((c) => inCap(c, cx, wy))) push(runs.still, col, row, 'var(--accent)')
+        else if (tapping.some((c) => inCap(c, cx, wy))) push(runs.tapping, col, row, 'var(--accent)')
       }
     }
-    if (cur) runs.push(cur)
   }
-  return runs
+  return { cell, ...runs }
 }
 
-function Runs({ runs, className }: { runs: Run[]; className?: string }) {
+function useSize(ref: RefObject<Element | null>): [number, number] {
+  const [size, setSize] = useState<[number, number]>(() => [window.innerWidth, window.innerHeight])
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      const w = Math.round(entry.contentRect.width)
+      const h = Math.round(entry.contentRect.height)
+      setSize((old) => (old[0] === w && old[1] === h ? old : [w, h]))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ref])
+  return size
+}
+
+function Runs({ runs, cell, className, style }: { runs: Run[]; cell: number; className?: string; style?: CSSProperties }) {
   return (
-    <g className={className}>
+    <g className={className} style={style}>
       {runs.map((r) => (
-        <rect key={`${r.x}-${r.y}`} x={r.x} y={r.y} width={r.w} height="1" fill={r.fill} />
+        <rect key={`${r.x}-${r.y}`} x={r.x} y={r.y} width={r.w} height={cell} fill={r.fill} />
       ))}
     </g>
   )
 }
 
 function PovLegs() {
-  const layers = useMemo(
-    () => ({
-      // In his own shadow, so the thighs stand off it.
-      belly: rasterize([BELLY], 'var(--accent-deep)'),
-      legs: rasterize([FOOT, LEG, mirror(LEG)]),
-      // Drawn on its own so it can tap: he is in no hurry.
-      tapper: rasterize([mirror(FOOT)]),
-    }),
-    [],
-  )
+  const ref = useRef<SVGSVGElement>(null)
+  const [width, height] = useSize(ref)
+  const art = useMemo(() => paint(width, height), [width, height])
   return (
-    <svg className="pov-legs sprite" viewBox={`0 0 ${LEGS_W} ${LEGS_H}`} shapeRendering="crispEdges">
-      <Runs runs={layers.belly} />
-      <Runs runs={layers.legs} />
-      <Runs runs={layers.tapper} className="pov-tap" />
+    <svg ref={ref} className="pov-legs sprite" viewBox={`0 0 ${width} ${height}`} shapeRendering="crispEdges">
+      <Runs runs={art.still} cell={art.cell} />
+      {/* One foot taps now and then: he is in no hurry. */}
+      <Runs runs={art.tapping} cell={art.cell} className="pov-tap" style={{ '--cell': `${art.cell}px` } as CSSProperties} />
     </svg>
   )
 }

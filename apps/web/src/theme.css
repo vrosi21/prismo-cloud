@@ -28,7 +28,7 @@
   --cube-side: #dcae1c;
   --cube-line: #2a1a3e;
   --cube-figure: #f48fb1;
-  --pov-shade: #b84a74; /* the far side of Prismo's legs, one step past --accent-deep */
+  --pov-floor: #ea76a0; /* Prismo where he lies on the floor: a step deeper than on the wall */
 }
 
 /* Multiverse: the void outside the cube */
@@ -422,21 +422,18 @@ select.field { appearance: none; cursor: pointer; padding-right: 26px;
 }
 @keyframes bob { to { transform: translateY(18px); } }
 
-/* Time Room: Prismo's own legs, lying down the floor towards the far wall.
-   Sized off the viewport height so the feet land near the back edge of the
-   floor on any screen; capped by width on narrow ones. */
+/* Time Room: Prismo's own legs, flat on the floor and folding up the wall.
+   Drawn in screen pixels, so the box is the screen. */
 .pov-legs {
   position: absolute;
-  bottom: 0;
-  left: 50%;
-  height: min(48vh, 60vw);
-  aspect-ratio: 2 / 1;
-  transform: translateX(-50%);
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 .pov-tap { animation: pov-tap 7s steps(1) infinite; }
 @keyframes pov-tap {
   0%, 89%, 95% { transform: none; }
-  86%, 92% { transform: translate(1px, -1px); }
+  86%, 92% { transform: translateY(calc(var(--cell) * -1)); }
 }
 
 /* --- Prismo's cube ---------------------------------------------------------- */
