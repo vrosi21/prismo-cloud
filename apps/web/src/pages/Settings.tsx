@@ -5,7 +5,9 @@ import { copyText, when } from '../lib/format'
 import { errorText, log } from '../lib/log'
 import { useTokens } from '../lib/queries'
 import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/theme'
-import { Arrow, type ArrowDir } from '../components/sprites'
+import { ARROWS, KeyCap } from '../components/KeyCap'
+import type { ArrowDir } from '../components/sprites'
+import { WALLS } from '../lib/room'
 
 export function Settings({ me }: { me: Me }) {
   return (
@@ -54,7 +56,6 @@ function Look() {
 // Every key the app answers to. None are letters on their own: those stay
 // free for Vimium and other keyboard browsing add-ons.
 type Cap = ArrowDir | string
-const ARROWS: ArrowDir[] = ['up', 'down', 'left', 'right']
 const KEY_GUIDE: { title?: string; rows: [Cap[], string][] }[] = [
   {
     rows: [
@@ -64,6 +65,13 @@ const KEY_GUIDE: { title?: string; rows: [Cap[], string][] }[] = [
       [['shift', 'space'], 'select every file from the last one picked'],
       [['backspace'], 'close what is open, or go back'],
       [['esc'], 'close what is open, or clear the selection'],
+    ],
+  },
+  {
+    title: 'turning round the room',
+    rows: [
+      ...WALLS.map((w): [Cap[], string] => [['ctrl', w.key], w.id === 'files' ? 'face the files' : `face the ${w.name} wall (empty for now)`]),
+      [['backspace'], 'on another wall: back to the files'],
     ],
   },
   {
@@ -82,16 +90,6 @@ const KEY_GUIDE: { title?: string; rows: [Cap[], string][] }[] = [
   },
   { title: 'anywhere', rows: [[['ctrl', 'k'], 'the command list']] },
 ]
-
-function KeyCap({ cap }: { cap: Cap }) {
-  const arrow = (ARROWS as string[]).includes(cap)
-  return (
-    <kbd className="key">
-      {arrow ? <Arrow dir={cap as ArrowDir} /> : cap}
-      {arrow && <span className="sr-only">{cap} arrow</span>}
-    </kbd>
-  )
-}
 
 function KeyGroup({ title, rows }: (typeof KEY_GUIDE)[number]) {
   return (
@@ -114,16 +112,18 @@ function KeyGroup({ title, rows }: (typeof KEY_GUIDE)[number]) {
 }
 
 function Keys() {
-  const [main, ...more] = KEY_GUIDE
+  // Moving and turning on the left; the keys for particular places on the right.
+  const columns = [KEY_GUIDE.slice(0, 2), KEY_GUIDE.slice(2)]
   return (
     <Section title="keys">
       <div className="grid gap-x-10 gap-y-6 md:grid-cols-2">
-        <KeyGroup {...main} />
-        <div className="flex flex-col gap-6">
-          {more.map((g) => (
-            <KeyGroup key={g.title} {...g} />
-          ))}
-        </div>
+        {columns.map((groups, i) => (
+          <div key={i} className="flex flex-col gap-6">
+            {groups.map((g) => (
+              <KeyGroup key={g.title ?? 'main'} {...g} />
+            ))}
+          </div>
+        ))}
       </div>
       <p className="dim">&gt; no letter keys on their own: those stay free for vimium and the like.</p>
     </Section>

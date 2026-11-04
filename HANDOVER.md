@@ -61,7 +61,7 @@ Second round (asked for: all three "ideas for next time"):
 Third round (asked for: turn four ways in the room, each wall its own thing,
 by keyboard; one wall is the files, the others placeholders with ideas):
 
-10. [ ] The room: four walls (files in front; time, wishes and lookout as
+10. [x] The room: four walls (files in front; time, wishes and lookout as
         placeholders listing ideas), Ctrl+arrow faces that wall with a
         stepped 3D turn, a D-pad in the header, Backspace turns back to the
         files, focus follows the turn, key guide and hints updated.
@@ -129,6 +129,20 @@ by keyboard; one wall is the files, the others placeholders with ideas):
   in groups (everywhere, looking at a file, with files selected, anywhere).
   It lists only keys the code handles: arrows, Enter, Space, Shift+Space,
   Backspace, Esc, Ctrl+A, Delete, Ctrl+K. Two columns on wide screens.
+- Step 10 done. `lib/room.ts` holds the walls (`WALLS`: files in front,
+  then clockwise time, wishes, lookout, each with a blurb and ideas) and the
+  `facing` store (`turnTo`, `settle`). `components/Room.tsx` renders all four
+  walls in one place (`.room`/`.wall` in `theme.css`); the walls not faced
+  are hidden and `inert` but stay mounted, so the files keep their folder,
+  scroll and focused tile. Ctrl+arrow faces that wall (skipped while typing,
+  where it is a word jump, and while a dialog is open); Backspace on another
+  wall turns back to the files; following any link or command turns back to
+  the files too. A turn is a stepped 3D swing (420 ms, `steps(7)`, off with
+  reduced motion). `Compass` in the header is a D-pad of the four walls. An
+  empty wall (`EmptyWall`) shows its ideas and buttons to turn to the others;
+  keyboard focus lands on "files". To fill a wall, replace `EmptyWall` for
+  that wall in `Room`. Key guide (Settings) and status bar hint updated;
+  `KeyCap` moved to `components/KeyCap.tsx`.
 
 ## Ideas for next time
 

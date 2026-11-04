@@ -434,6 +434,60 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 .nav-item .count { flex: none; margin-left: auto; padding-left: 6px; opacity: 0.7; }
 .nav-item .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* The room: the four walls in one place, one faced at a time. A turn swings
+   the old wall out and the new one in about a point in front of the screen,
+   as if turning round inside a cube; in steps, like everything that moves
+   here. --turn matches TURN_MS in lib/room.ts. */
+.room { --turn: 420ms; position: relative; perspective: 170vw; }
+.wall {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  transform-origin: 50% 50% 46vw;
+}
+.wall[data-state="away"] { visibility: hidden; }
+.wall[data-state="coming"],
+.wall[data-state="going"] { backface-visibility: hidden; pointer-events: none; }
+.room[data-turn="right"] .wall[data-state="going"] { animation: wall-off-left var(--turn) steps(7) both; }
+.room[data-turn="right"] .wall[data-state="coming"] { animation: wall-on-right var(--turn) steps(7) both; }
+.room[data-turn="left"] .wall[data-state="going"] { animation: wall-off-right var(--turn) steps(7) both; }
+.room[data-turn="left"] .wall[data-state="coming"] { animation: wall-on-left var(--turn) steps(7) both; }
+@keyframes wall-off-left { to { transform: rotateY(90deg); } }
+@keyframes wall-on-right { from { transform: rotateY(-90deg); } }
+@keyframes wall-off-right { to { transform: rotateY(-90deg); } }
+@keyframes wall-on-left { from { transform: rotateY(90deg); } }
+
+/* An empty wall's list of ideas, with pixel bullets. */
+.wall-sign { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: var(--bg-deep); box-shadow: inset 0 var(--px) 0 0 var(--shadow); }
+.wall-ideas { display: flex; flex-direction: column; gap: 8px; }
+.wall-ideas li { position: relative; padding-left: 22px; line-height: 1.15; }
+.wall-ideas li::before { content: ""; position: absolute; left: 3px; top: 0.42em; width: calc(var(--px) * 2); height: calc(var(--px) * 2); background: var(--accent-deep); }
+
+.wall-turn { display: inline-flex; align-items: center; padding: 0 8px 0 2px; cursor: pointer; color: var(--ink); }
+.wall-turn:hover:not(:disabled) { background: var(--panel-2); }
+.wall-turn:disabled { cursor: default; color: var(--ink-dim); }
+
+/* The compass in the header: four arrows in a cross, the wall faced lit. */
+.compass { display: grid; grid-template: repeat(3, 13px) / repeat(3, 13px); }
+.compass button {
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.compass button:hover { background: var(--accent); color: var(--on-accent); }
+.compass button[aria-pressed="true"] { background: var(--accent-deep); color: var(--on-accent); }
+.compass button:focus-visible { outline-width: 2px; outline-offset: 1px; z-index: 1; }
+.compass-up { grid-area: 1 / 2; }
+.compass-left { grid-area: 2 / 1; }
+.compass-right { grid-area: 2 / 3; }
+.compass-down { grid-area: 3 / 2; }
+.compass-hub { grid-area: 2 / 2; background: var(--line); }
+
 /* The key guide in Settings: key caps, then what they do. */
 .keys { display: grid; grid-template-columns: max-content 1fr; gap: 10px 18px; align-items: center; margin: 0; }
 .keys dt { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -662,6 +716,7 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 @keyframes eye-blink { 0%, 94% { transform: scaleY(1); } 95%, 100% { transform: scaleY(0.15); } }
 
 @media (prefers-reduced-motion: reduce) {
+  .room .wall { animation: none !important; }
   .mv-rock, .mv-cube, .mv-cube > span, .face-eye, .pop, .pov-tap { animation: none; }
   .pcube:not(.pcube-still) { animation: cube-pulse 1.2s steps(2, jump-none) infinite; background-position-x: 0; }
   @keyframes cube-pulse { to { opacity: 0.45; } }

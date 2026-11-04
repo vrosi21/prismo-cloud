@@ -11,7 +11,9 @@ import { uploadTarget } from '../lib/target'
 import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/theme'
 import { uploadFiles, uploads } from '../lib/uploads'
 import { Boot, LogLines, Palette, UploadTray, type Command } from './Overlays'
+import { Compass, Room } from './Room'
 import { BmoFace, Cube, Twist, type Mood } from './sprites'
+import { turnTo } from '../lib/room'
 
 export const KINDS = [
   { id: 'image', label: 'images' },
@@ -133,7 +135,15 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
     <div className="relative z-10 flex h-full flex-col">
       <Boot />
       <header className="panel px relative z-20 mx-3 mt-3 flex items-center gap-3 px-3 py-2">
-        <button type="button" className="btn btn-sm md:hidden" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
+        <button
+          type="button"
+          className="btn btn-sm md:hidden"
+          aria-expanded={menuOpen}
+          onClick={() => {
+            turnTo(0) // the menu is the files' sidebar
+            setMenuOpen((o) => !o)
+          }}
+        >
           menu
         </button>
         <Link to="/" className="flex items-center gap-3" aria-label="Prismo Cloud, all files">
@@ -141,6 +151,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
           <h1 className="hidden sm:block">PRISMO CLOUD</h1>
         </Link>
         {me.member ? <SearchBox key={params.get('q') ?? ''} initial={params.get('q') ?? ''} onSearch={search} /> : <span className="flex-1" />}
+        <Compass />
         <button type="button" className="btn hidden sm:inline-flex" onClick={() => setPaletteOpen(true)} title="commands (Ctrl+K)">
           ctrl+k
         </button>
@@ -161,10 +172,10 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
         />
       </header>
 
-      <div className="flex min-h-0 flex-1 gap-3 p-3">
+      <Room>
         <Sidebar open={menuOpen} member={me.member} tree={tree} />
         <main className="screen-door min-w-0 flex-1">{children}</main>
-      </div>
+      </Room>
 
       <StatusBar email={me.user.email} member={me.member} />
       <LogLines />
@@ -399,7 +410,7 @@ function StatusBar({ email, member }: { email: string; member: boolean }) {
       )}
       <span className="flex-1" />
       <span className="dim hidden truncate xl:inline" title="keys">
-        arrows move · enter open · space select · backspace back
+        arrows move · enter open · space select · ctrl+arrows turn
       </span>
       <span className="dim hidden truncate lg:inline">{email}</span>
       <button type="button" className="chip shrink-0" onClick={() => setScanlines(!scanlines)} aria-pressed={scanlines}>

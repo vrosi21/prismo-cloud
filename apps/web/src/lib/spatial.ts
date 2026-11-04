@@ -131,7 +131,7 @@ function nearestTo(spot: DOMRect, els: HTMLElement[]): HTMLElement | null {
   return best
 }
 
-function typing(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+export function typing(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
   if (!el) return false
   if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true
   if (el instanceof HTMLElement && el.isContentEditable) return true
@@ -161,6 +161,8 @@ function keepsArrow(el: Element | null, dir: Dir): boolean {
 }
 
 let keyboardUser = false
+/** Whether the last thing the person did was press a key (not point). */
+export const usingKeyboard = () => keyboardUser
 
 function onKey(e: KeyboardEvent) {
   keyboardUser = true
