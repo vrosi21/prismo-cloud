@@ -394,7 +394,7 @@ function FolderTile({ folder, onMoved }: { folder: FolderNode; onMoved: () => vo
     <Link to={`/?folder=${folder.id}`} data-nav-item className={`folder-tile ${drop.over ? 'drop-over' : ''}`} title={`${folder.name}: ${inside}`} {...drop.handlers}>
       <FolderIcon />
       <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-      <span className="dim shrink-0">{folder.count}</span>
+      <span className="count-badge shrink-0">{folder.count}</span>
     </Link>
   )
 }

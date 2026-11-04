@@ -23,6 +23,9 @@
   --danger: #b3261e;
   --ok: #1f7a45;
 
+  --hi: #fffbe3; /* the lit top edge inside a panel */
+  --lo: #f1d77c; /* the shaded bottom edge inside a panel */
+
   --cube-top: #ffe680;
   --cube-front: #f6d54a;
   --cube-side: #dcae1c;
@@ -47,6 +50,8 @@
   --teal: #5fe0d6;
   --danger: #ff7a72;
   --ok: #7be39a;
+  --hi: #2f3e96;
+  --lo: #0e1648;
 }
 
 /* BMO: mint screen, one ink */
@@ -65,6 +70,9 @@
   --teal: #165e78;
   --danger: #a3341f;
   --ok: #17693a;
+
+  --hi: #f4fff6;
+  --lo: #b2e5bf;
 
   --cube-top: #d9f7df;
   --cube-front: #9ddbb0;
@@ -121,7 +129,7 @@ h3,
   line-height: 1.5;
   letter-spacing: 0;
 }
-h1 { font-size: 14px; }
+h1 { font-size: 14px; text-shadow: calc(var(--px) * 0.67) calc(var(--px) * 0.67) 0 var(--lo); }
 h2 { font-size: 11px; }
 h3 { font-size: 9px; }
 
@@ -163,14 +171,6 @@ h3 { font-size: 9px; }
     calc(var(--px) * -1) 0 0 0 var(--line),
     var(--px) 0 0 0 var(--line);
 }
-.px-raised {
-  box-shadow:
-    0 calc(var(--px) * -1) 0 0 var(--line),
-    0 var(--px) 0 0 var(--line),
-    calc(var(--px) * -1) 0 0 0 var(--line),
-    var(--px) 0 0 0 var(--line),
-    0 calc(var(--px) * 3) 0 0 var(--shadow);
-}
 .px-accent {
   box-shadow:
     0 calc(var(--px) * -1) 0 0 var(--accent),
@@ -179,9 +179,33 @@ h3 { font-size: 9px; }
     var(--px) 0 0 0 var(--accent);
 }
 
+/* A window: the stepped outline, a lit edge along the top inside and a
+   shaded one along the bottom, and a slab of shadow under it, set one pixel
+   off to the right so its ends step too. */
 .panel {
   background: var(--panel);
   color: var(--ink);
+}
+.panel.px,
+.panel.px-raised {
+  box-shadow:
+    inset 0 var(--px) 0 0 var(--hi),
+    inset 0 calc(var(--px) * -1) 0 0 var(--lo),
+    0 calc(var(--px) * -1) 0 0 var(--line),
+    0 var(--px) 0 0 var(--line),
+    calc(var(--px) * -1) 0 0 0 var(--line),
+    var(--px) 0 0 0 var(--line),
+    var(--px) calc(var(--px) * 2) 0 0 var(--shadow);
+}
+.panel.px-raised {
+  box-shadow:
+    inset 0 var(--px) 0 0 var(--hi),
+    inset 0 calc(var(--px) * -1) 0 0 var(--lo),
+    0 calc(var(--px) * -1) 0 0 var(--line),
+    0 var(--px) 0 0 var(--line),
+    calc(var(--px) * -1) 0 0 0 var(--line),
+    var(--px) 0 0 0 var(--line),
+    calc(var(--px) * 2) calc(var(--px) * 3) 0 0 var(--shadow);
 }
 
 /* --- Controls -------------------------------------------------------------- */
@@ -201,26 +225,40 @@ h3 { font-size: 9px; }
   cursor: pointer;
   user-select: none;
   box-shadow:
+    inset 0 var(--px) 0 0 var(--hi),
+    inset 0 calc(var(--px) * -1) 0 0 var(--lo),
     0 calc(var(--px) * -1) 0 0 var(--line),
     0 var(--px) 0 0 var(--line),
     calc(var(--px) * -1) 0 0 0 var(--line),
     var(--px) 0 0 0 var(--line),
-    0 calc(var(--px) * 3) 0 0 var(--shadow);
+    0 calc(var(--px) * 2) 0 0 var(--shadow);
 }
 .btn:hover { background: var(--panel-2); }
+/* Pressed: down onto its shadow, lit edge gone, shade on top instead. */
 .btn:active:not(:disabled),
 .btn[aria-pressed="true"] {
   transform: translateY(calc(var(--px) * 2));
   box-shadow:
+    inset 0 var(--px) 0 0 var(--lo),
     0 calc(var(--px) * -1) 0 0 var(--line),
     0 var(--px) 0 0 var(--line),
     calc(var(--px) * -1) 0 0 0 var(--line),
     var(--px) 0 0 0 var(--line);
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-accent { background: var(--accent); color: var(--on-accent); }
-.btn-accent:hover { background: var(--accent-deep); }
-.btn-danger { background: var(--danger); color: #fff; }
+.btn-accent {
+  --hi: color-mix(in srgb, var(--accent) 55%, #fff);
+  --lo: var(--accent-deep);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.btn-accent:hover { background: color-mix(in srgb, var(--accent) 85%, #fff); }
+.btn-danger {
+  --hi: color-mix(in srgb, var(--danger) 60%, #fff);
+  --lo: color-mix(in srgb, var(--danger) 70%, #000);
+  background: var(--danger);
+  color: #fff;
+}
 .btn-danger:hover { filter: brightness(1.1); background: var(--danger); }
 .btn-sm { padding: 4px 8px; font-size: 8px; }
 
@@ -235,6 +273,7 @@ h3 { font-size: 9px; }
   border: 0;
   border-radius: 0;
   box-shadow:
+    inset 0 var(--px) 0 0 var(--shadow),
     0 calc(var(--px) * -1) 0 0 var(--line),
     0 var(--px) 0 0 var(--line),
     calc(var(--px) * -1) 0 0 0 var(--line),
@@ -292,7 +331,24 @@ select.field { appearance: none; cursor: pointer; padding-right: 26px;
 }
 .nav-item[aria-current="page"]::before { content: ">"; }
 .nav-item:hover { background: var(--panel-2); }
-.nav-item[aria-current="page"] { background: var(--ink); color: var(--bg); }
+.nav-item[aria-current="page"] { background: var(--accent); color: var(--on-accent); }
+.nav-item:focus-visible { outline-offset: calc(var(--px) * -1); }
+
+/* Sidebar section titles run into a dotted rule. */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 8px;
+  color: var(--ink-dim);
+}
+.section-title::after {
+  content: "";
+  flex: 1;
+  height: var(--px);
+  background: repeating-linear-gradient(90deg, currentColor 0 var(--px), transparent var(--px) calc(var(--px) * 2));
+  opacity: 0.6;
+}
 .nav-item .count { flex: none; margin-left: auto; padding-left: 6px; opacity: 0.7; }
 .nav-item .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -319,17 +375,66 @@ select.field { appearance: none; cursor: pointer; padding-right: 26px;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding: 7px 12px;
+  padding: 8px 12px;
   background: var(--panel);
   color: var(--ink);
   cursor: pointer;
   box-shadow:
+    inset 0 var(--px) 0 0 var(--hi),
+    inset 0 calc(var(--px) * -1) 0 0 var(--lo),
     0 calc(var(--px) * -1) 0 0 var(--line),
     0 var(--px) 0 0 var(--line),
     calc(var(--px) * -1) 0 0 0 var(--line),
-    var(--px) 0 0 0 var(--line);
+    var(--px) 0 0 0 var(--line),
+    var(--px) calc(var(--px) * 2) 0 0 var(--shadow);
 }
-.folder-tile:hover { background: var(--panel-2); }
+.folder-tile:hover { background: var(--panel-2); transform: translateY(calc(var(--px) * -1)); }
+.folder-tile .count-badge { padding: 0 6px; background: var(--bg-deep); color: var(--ink-dim); }
+
+/* Behind the files the room shows through a screen door: every other
+   pixel is the background colour, the old way of drawing see-through. Bits
+   of backdrop between tiles then read as the room behind, not as clutter. */
+.screen-door {
+  background: repeating-conic-gradient(var(--bg) 0 25%, transparent 0 50%) 0 0 / calc(var(--px) * 2) calc(var(--px) * 2);
+}
+
+/* A file: picture on top, name in a bar along the bottom, all one card.
+   It lifts under the pointer; once selected it turns the accent colour. */
+.card {
+  position: relative;
+  display: block;
+  cursor: pointer;
+  background: var(--panel);
+  box-shadow:
+    0 calc(var(--px) * -1) 0 0 var(--line),
+    0 var(--px) 0 0 var(--line),
+    calc(var(--px) * -1) 0 0 0 var(--line),
+    var(--px) 0 0 0 var(--line),
+    var(--px) calc(var(--px) * 2) 0 0 var(--shadow);
+}
+.card:hover { transform: translateY(calc(var(--px) * -1)); }
+.card-thumb { position: relative; overflow: hidden; background: var(--bg-deep); }
+.card-name {
+  height: 29px;
+  padding: 0 8px;
+  border-top: var(--px) solid var(--line);
+  font-size: 18px;
+  line-height: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 var(--px) 0 0 var(--hi);
+}
+.card[data-selected] {
+  box-shadow:
+    0 calc(var(--px) * -1) 0 0 var(--accent-deep),
+    0 var(--px) 0 0 var(--accent-deep),
+    calc(var(--px) * -1) 0 0 0 var(--accent-deep),
+    var(--px) 0 0 0 var(--accent-deep),
+    inset 0 0 0 var(--px) var(--accent),
+    var(--px) calc(var(--px) * 2) 0 0 var(--shadow);
+}
+.card[data-selected] .card-name { background: var(--accent); color: var(--on-accent); border-color: var(--accent-deep); box-shadow: none; }
 
 .crumb { cursor: pointer; }
 .crumb:hover { text-decoration: underline; }

@@ -310,7 +310,7 @@ function Sidebar({ open, member, tree }: { open: boolean; member: boolean; tree:
       {member && (
         <>
           <div>
-            <h3 className="dim px-[14px] pb-2">FOLDERS</h3>
+            <h3 className="section-title">FOLDERS</h3>
             <div className={`nav-item ${rootDrop.over ? 'drop-over' : ''}`} aria-current={atRoot ? 'page' : undefined} {...rootDrop.handlers}>
               <Link to="/" className="grow">
                 all files
@@ -322,7 +322,7 @@ function Sidebar({ open, member, tree }: { open: boolean; member: boolean; tree:
           </div>
 
           <div>
-            <h3 className="dim px-[14px] pb-2">BY TYPE</h3>
+            <h3 className="section-title">BY TYPE</h3>
             <NavItem to="/?view=all" active={everything} count={stats?.assets}>
               everything
             </NavItem>
@@ -337,7 +337,7 @@ function Sidebar({ open, member, tree }: { open: boolean; member: boolean; tree:
 
       {(sharedFolders.length > 0 || sharedItems > 0 || !member) && (
         <div>
-          <h3 className="dim px-[14px] pb-2">SHARED WITH ME</h3>
+          <h3 className="section-title">SHARED WITH ME</h3>
           {sharedFolders.map((f) => (
             <NavItem key={f.id} to={`/shared/folder/${f.id}`} active={pathname === `/shared/folder/${f.id}`} count={f.count}>
               {f.name}

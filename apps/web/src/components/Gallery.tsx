@@ -4,11 +4,11 @@ import type { Asset } from '../api'
 import { endAssetDrag, startAssetDrag } from '../lib/drag'
 import { displayName, duration } from '../lib/format'
 import { focusEl } from '../lib/spatial'
-import { BmoFace, Cube } from './sprites'
+import { BmoFace, Check, Cube, FileIcon } from './sprites'
 
 const GAP = 20
 const MIN_TILE = 168
-const CAPTION = 26
+const CAPTION = 29 // the name bar under each picture (.card-name)
 
 /** How a click changes the selection. */
 export type SelectMode = 'toggle' | 'range'
@@ -138,7 +138,7 @@ export function Gallery({ assets, selected, selectable = true, header, empty, on
   }
 
   return (
-    <div ref={scroller} className="relative h-full overflow-y-auto px-2 pt-2" onKeyDown={onKeyDown}>
+    <div ref={scroller} className="screen-door relative h-full overflow-y-auto px-3 pt-3" onKeyDown={onKeyDown}>
       <div>{header}</div>
       <div ref={track} className="relative" style={{ height: virtual.getTotalSize() }}>
         {items.map((row) => (
@@ -213,8 +213,9 @@ function AssetCard({ index, asset, size, selected, selection, selecting, selecta
         data-nav-item
         data-index={index}
         aria-label={`${displayName(asset)}${selected ? ', selected' : ''}`}
-        className={`group relative block cursor-pointer overflow-hidden bg-bg-deep ${selected ? 'px-accent' : 'px'}`}
-        style={{ width: size, height: size }}
+        data-selected={selected || undefined}
+        className="card group"
+        style={{ width: size }}
         draggable={selectable}
         onDragStart={(e) => startAssetDrag(e, selected ? [...selection] : [asset.id])}
         onDragEnd={endAssetDrag}
@@ -229,6 +230,7 @@ function AssetCard({ index, asset, size, selected, selection, selecting, selecta
           }
         }}
       >
+        <div className="card-thumb" style={{ height: size }}>
         {moving && clip ? (
           <video src={clip} poster={still} autoPlay muted loop playsInline className="h-full w-full object-cover" />
         ) : moving && asset.urls.file ? (
@@ -243,8 +245,13 @@ function AssetCard({ index, asset, size, selected, selection, selecting, selecta
             className={`h-full w-full ${asset.kind === 'sticker' ? 'checker object-contain' : 'object-cover'}`}
           />
         ) : (
-          <div className="pixel flex h-full w-full items-center justify-center text-[11px] uppercase text-dim">
-            {ready ? asset.filename.split('.').pop()?.slice(0, 5) || 'file' : ''}
+          <div className="pixel flex h-full w-full flex-col items-center justify-center gap-3 text-[9px] uppercase text-dim">
+            {ready && (
+              <>
+                <FileIcon scale={4} />
+                {asset.filename.includes('.') ? asset.filename.split('.').pop()?.slice(0, 5) : 'file'}
+              </>
+            )}
           </div>
         )}
 
@@ -289,12 +296,13 @@ function AssetCard({ index, asset, size, selected, selection, selecting, selecta
               selected ? 'bg-accent text-on-accent' : 'bg-panel text-ink opacity-0 focus:opacity-100 group-hover:opacity-100'
             } ${selecting ? '!opacity-100' : ''}`}
           >
-            {selected ? 'x' : ''}
+            {selected && <Check />}
           </button>
         )}
-      </div>
-      <div className="mt-[7px] truncate text-[18px]" title={displayName(asset)}>
-        {displayName(asset)}
+        </div>
+        <div className="card-name" title={displayName(asset)}>
+          {displayName(asset)}
+        </div>
       </div>
     </div>
   )

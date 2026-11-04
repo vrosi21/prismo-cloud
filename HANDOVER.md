@@ -45,7 +45,7 @@ not, click "development sign-in". Theme is in localStorage `prismo.theme`
        see-through) drawn to a sprite sheet; replaces the CSS 3D loader.
 3. [x] Multiverse backdrop: blue void, purple swirl, rocks, sparkles, the
        Time Room big in the middle; palette moved towards the reference.
-4. [ ] Restyle panels, tiles, buttons, fields, sidebar, status bar.
+4. [x] Restyle panels, tiles, buttons, fields, sidebar, status bar.
 5. [ ] Higher-resolution sprites (Prismo, folder, etc.).
 6. [ ] Final polish, screenshots, this file brought up to date.
 
@@ -71,3 +71,12 @@ not, click "development sign-in". Theme is in localStorage `prismo.theme`
   Room cube (`TIME_ROOM` colours, 24 frames) in the middle. `lib/size.ts`
   holds the shared `useSize` hook. Multiverse tokens in `theme.css` are now
   blue/indigo to match.
+- Step 4 done (`theme.css`). New tokens `--hi`/`--lo` per theme (lit and
+  shaded inner edges). `.panel.px`/`.panel.px-raised` are windows with a
+  bevel and a stepped shadow; `.btn` has a bevel and presses down; `.field`
+  is sunken; files are `.card` (picture + `.card-name` bar, `data-selected`
+  turns it the accent colour) with a pixel tick (`Check`) and a page icon
+  (`FileIcon`) for files without a picture; sidebar titles are
+  `.section-title` with a dotted rule; the current row is accent coloured;
+  folder tiles lift and show counts in a badge. The gallery sits on a
+  `.screen-door` dither so backdrop bits between tiles read as background.

@@ -140,3 +140,25 @@ export function FolderIcon({ scale = 2 }: { scale?: number }) {
     </svg>
   )
 }
+
+// A tick for a selected file, on a 7x6 grid.
+export function Check({ scale = 2 }: { scale?: number }) {
+  return (
+    <svg viewBox="0 0 7 6" width={7 * scale} height={6 * scale} shapeRendering="crispEdges" className="sprite" aria-hidden>
+      <path fill="currentColor" d="M6 0h1v2H6v1H5v1H4v1H3v1H2V5H1V4H0V2h1v1h1v1h1V3h1V2h1V1h1z" />
+    </svg>
+  )
+}
+
+// A page with its corner folded down, for files with no picture, on a 10x12 grid.
+export function FileIcon({ scale = 3 }: { scale?: number }) {
+  return (
+    <svg viewBox="0 0 10 12" width={10 * scale} height={12 * scale} shapeRendering="crispEdges" className="sprite" aria-hidden>
+      <path fill="var(--line)" d="M0 0h7v1h1v1h1v1h1v9H0z" />
+      <path fill="var(--panel)" d="M1 1h5v3h3v7H1z" />
+      <path fill="var(--hi)" d="M7 1v2h2V2H8V1z" />
+      <path fill="var(--ink-dim)" d="M2 6h6v1H2zm0 2h6v1H2zm0 2h4v1H2z" />
+    </svg>
+  )
+}
+
