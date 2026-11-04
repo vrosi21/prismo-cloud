@@ -1,15 +1,18 @@
 // Stand-in for the real API, for working on the UI without the backend
 // running. Data lives in memory and resets on restart. Sign in with the
-// "development sign-in" button.
+// "development sign-in" button. The pictures are drawn by pictures.mjs;
+// the recordings are real clips if ffmpeg is installed.
 //
 //   node mock/server.mjs            (port 8099)
 //   PRISMO_API=http://localhost:8099 pnpm dev
 
 import { createServer } from 'node:http'
+import { SKIES, desktop, editor, gif, phone, photo, recordings, sticker } from './pictures.mjs'
 
 const PORT = Number(process.env.PORT ?? 8099)
 const PUBLIC = 'http://localhost:5173'
-const PALETTE = ['#f48fb1', '#1f9c93', '#f6d54a', '#9484e6', '#ff7a72', '#7be39a', '#2a1a3e', '#5fe0d6']
+// Short video clips for the recordings, filled in as ffmpeg makes them.
+const CLIPS = recordings()
 
 let signedIn = false
 let seq = 0
@@ -19,30 +22,54 @@ const collections = ['screenshots', 'gifs', 'stickers'].map((name) => ({ id: uui
 collections.push({ id: uuid(), name: '2026', parent_id: collections[0].id, created_at: new Date().toISOString() })
 const tokens = []
 const shares = []
-const KINDS = ['image', 'image', 'image', 'gif', 'video', 'sticker', 'file']
+const folderId = (name) => collections.find((c) => c.name === name).id
+// Which picture each file shows (see pictures.mjs), by asset id.
+const looks = new Map()
 const assets = Array.from({ length: 150 }, (_, i) => makeAsset(i))
+
+// The samples repeat in runs of seven: a photo, a desktop screenshot, a phone
+// screenshot, a gif, a recording, a sticker and a zip. Photos, recordings and
+// zips are at the top level; the rest in the folder for them.
+function sample(i) {
+  const n = Math.floor(i / 7)
+  const stamp = `2026-${String(1 + (n % 12)).padStart(2, '0')}-${String(1 + ((n * 5) % 28)).padStart(2, '0')}`
+  switch (i % 7) {
+    case 0: {
+      const tall = n % 3 === 2
+      return { kind: 'image', look: 'photo', width: tall ? 1080 : 1600, height: tall ? 1350 : 1067, mime: 'image/jpeg', filename: `IMG_${4102 + i}.jpg`, title: SKIES[n % SKIES.length].title, folder: null, bytes: 2_400_000 }
+    }
+    case 1:
+      return { kind: 'image', look: n % 2 ? 'editor' : 'desktop', width: 1920, height: 1080, mime: 'image/png', filename: `Screenshot ${stamp} ${String(100000 + ((i * 7919) % 130000)).slice(-6)}.png`, folder: n % 3 === 0 ? '2026' : 'screenshots', bytes: 640_000 }
+    case 2:
+      return { kind: 'image', look: 'phone', width: 1170, height: 2532, mime: 'image/png', filename: `IMG_${5300 + i}.PNG`, folder: 'screenshots', bytes: 820_000 }
+    case 3:
+      return { kind: 'gif', look: 'gif', width: 480, height: 360, mime: 'image/gif', filename: `${['bounce', 'vibes', 'yay'][n % 3]}_${i}.gif`, title: ['bounce', 'vibes', 'yay'][n % 3], folder: 'gifs', bytes: 1_300_000 }
+    case 4:
+      return { kind: 'video', look: 'clip', width: 640, height: 360, mime: 'video/mp4', filename: `recording ${stamp}.mp4`, folder: null, bytes: 6_000_000, duration_ms: 6000 }
+    case 5:
+      return { kind: 'sticker', look: 'sticker', width: 512, height: 512, mime: 'image/png', filename: `sticker_${i}.png`, folder: 'stickers', bytes: 90_000 }
+    default:
+      return { kind: 'file', look: null, width: null, height: null, mime: 'application/zip', filename: `${['backup', 'project', 'fonts', 'old-site'][n % 4]}_${i}.zip`, folder: null, bytes: 4_000_000 }
+  }
+}
 
 function makeAsset(i, extra = {}) {
   const id = uuid()
-  const kind = KINDS[i % KINDS.length]
-  const ext = { image: 'png', gif: 'gif', video: 'mp4', sticker: 'png', file: 'zip' }[kind]
+  const { look, folder, title = '', bytes, duration_ms = null, ...s } = sample(i)
+  looks.set(id, { look, seed: Math.floor(i / 7) })
   return {
     id,
-    kind,
+    ...s,
     status: i === 1 ? 'processing' : i === 4 ? 'failed' : 'ready',
     error: i === 4 ? 'could not process this file' : null,
-    title: i % 3 === 0 ? `capture ${i}` : '',
-    filename: `shot_${String(i).padStart(4, '0')}.${ext}`,
-    mime: { image: 'image/png', gif: 'image/gif', video: 'video/mp4', sticker: 'image/png', file: 'application/zip' }[kind],
-    bytes: 12000 + i * 9137,
-    width: kind === 'file' ? null : 1280,
-    height: kind === 'file' ? null : 720,
-    duration_ms: kind === 'video' ? 4000 + i * 100 : null,
+    title,
+    bytes: Math.round(bytes * (0.6 + ((i * 37) % 80) / 100)),
+    duration_ms,
     visibility: ['private', 'unlisted', 'public'][i % 3],
     slug: `slug${i}`,
     source: ['web', 'sharex', 'watcher'][i % 3],
     tags: i % 4 === 0 ? ['cat', 'reaction'] : [],
-    collection_id: kind === 'file' ? null : collections[i % 3].id,
+    collection_id: folder ? folderId(folder) : null,
     created_at: new Date(Date.now() - i * 3_600_000).toISOString(),
     updated_at: new Date().toISOString(),
     deleted_at: null,
@@ -67,16 +94,34 @@ function view(a) {
   }
 }
 
-// A different blocky picture per asset, so the grid does not look uniform.
-function picture(id) {
-  const n = Number(id.slice(-6))
-  let cells = ''
-  for (let y = 0; y < 9; y++)
-    for (let x = 0; x < 16; x++) {
-      const v = (x * 7 + y * 13 + n * 31 + ((x * y) % 5) * n) % 11
-      if (v < 4) cells += `<rect x="${x}" y="${y}" width="1" height="1" fill="${PALETTE[(v + n) % PALETTE.length]}"/>`
+// The file itself, or with ?variant=thumb its thumbnail: for a gif the first
+// frame, for a recording a still from it.
+function draw(id, variant) {
+  const { look, seed } = looks.get(id) ?? { look: 'photo', seed: 0 }
+  const a = assets.find((x) => x.id === id)
+  const SVG = 'image/svg+xml'
+  const thumb = variant === 'thumb'
+  switch (look) {
+    case 'photo':
+      return [200, photo(seed, a?.width ?? 1600, a?.height ?? 1067), SVG]
+    case 'desktop':
+      return [200, desktop(seed), SVG]
+    case 'editor':
+      return [200, editor(seed), SVG]
+    case 'phone':
+      return [200, phone(seed), SVG]
+    case 'gif':
+      return [200, gif(seed, !thumb), SVG]
+    case 'sticker':
+      return [200, sticker(seed), SVG]
+    case 'clip': {
+      const clip = CLIPS[seed % CLIPS.length]
+      if (clip) return thumb ? [200, clip.poster, 'image/png'] : [200, clip.mp4, 'video/mp4']
+      return thumb ? [200, editor(seed), SVG] : [404, { error: 'recordings need ffmpeg' }]
     }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9" width="1280" height="720" shape-rendering="crispEdges"><rect width="16" height="9" fill="${PALETTE[(n + 3) % PALETTE.length]}"/>${cells}</svg>`
+    default:
+      return [404, { error: 'no picture for this file' }]
+  }
 }
 
 function body(req) {
@@ -150,7 +195,7 @@ const routes = [
     setTimeout(() => (a.status = 'ready'), 2500) // stands in for the worker
     return [200, view(a)]
   }],
-  ['GET', /^\/v1\/assets\/([^/]+)\/file$/, (req, m) => [200, picture(m[1]), 'image/svg+xml']],
+  ['GET', /^\/v1\/assets\/([^/]+)\/file$/, (req, m, q) => draw(m[1], q.get('variant'))],
   ['PATCH', /^\/v1\/assets\/([^/]+)$/, async (req, m) => {
     const a = assets.find((x) => x.id === m[1])
     Object.assign(a, await body(req))

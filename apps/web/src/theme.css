@@ -285,7 +285,7 @@ select.field {
   --row: linear-gradient(var(--ink), var(--ink));
   appearance: none;
   cursor: pointer;
-  padding-right: calc(var(--px) * 11);
+  padding-right: calc(var(--px) * 10);
   background-image: var(--row), var(--row), var(--row);
   background-repeat: no-repeat;
   background-size: calc(var(--px) * 5) var(--px), calc(var(--px) * 3) var(--px), var(--px) var(--px);

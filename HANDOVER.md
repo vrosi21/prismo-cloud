@@ -52,7 +52,7 @@ not, click "development sign-in". Theme is in localStorage `prismo.theme`
 Second round (asked for: all three "ideas for next time"):
 
 7. [x] Pixel art for the folder tree's +/- and the arrow on dropdowns.
-8. [ ] Sample pictures in the mock API (screenshots, photos, phone
+8. [x] Sample pictures in the mock API (screenshots, photos, phone
        captures, stickers with see-through backgrounds, animated gifs,
        video stills) in mixed sizes, some at the top level, so the file
        cards can be judged with real-looking pictures.
@@ -104,6 +104,17 @@ Second round (asked for: all three "ideas for next time"):
   rows; checkboxes are sunken squares that turn accent with the pixel tick
   (a `clip-path` of the `Check` sprite); sliders are a sunken groove with a
   raised block. Checked in all three themes.
+- Step 8 done. `apps/web/mock/pictures.mjs` draws seeded SVGs: landscape
+  photos (5 skies, wide and tall), desktop screenshots (a browser with a blog
+  post, light or dark), code editor screenshots, phone chat screenshots,
+  stickers (7 cartoons with a white border on a see-through background) and
+  animated gifs (SMIL; `?variant=thumb` gives the still first frame). Videos
+  are real mp4 clips made by ffmpeg in the background on the first start
+  (about 3 s) and kept in the temp folder (`prismo-mock-clips-2`); without
+  ffmpeg they show a still only. In `server.mjs` the 150 samples repeat in
+  runs of seven (photo, desktop, phone, gif, recording, sticker, zip) with
+  real sizes and names; photos, recordings and zips are at the top level,
+  the rest in their folders (some screenshots in `2026`).
 
 ## Ideas for next time
 
