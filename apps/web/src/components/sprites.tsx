@@ -1,19 +1,35 @@
-import type { CSSProperties } from 'react'
+import { useMemo, type CSSProperties } from 'react'
+import { cubeSheet, themeCube } from '../lib/pixelcube'
+import { useTheme } from '../lib/theme'
 
-// Prismo's cube: the Time Room seen from outside, turning in steps.
-// Used as the loading indicator everywhere.
+const SPIN_FRAMES = 8
+
+// Prismo's cube, the Time Room, seen from outside and turning in steps like a
+// sprite. Used as the loading indicator everywhere.
 export function Cube({ size = 32, still = false, label }: { size?: number; still?: boolean; label?: string }) {
+  const theme = useTheme()
+  // Big cubes get bigger pixels, so every size reads as pixel art.
+  const scale = size >= 48 ? 3 : size >= 32 ? 2 : 1
+  const grid = Math.max(9, Math.round(size / scale))
+  const px = grid * scale
+  const sheet = useMemo(() => cubeSheet({ grid, frames: SPIN_FRAMES, tilt: 0.42 }, themeCube()), [grid, theme])
   return (
-    <span className="cube-scene" role={label ? 'status' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
-      <span className={`cube block${still ? ' cube-still' : ''}`} style={{ '--s': `${size}px` } as CSSProperties}>
-        <i />
-        <i />
-        <i />
-        <i />
-        <i />
-        <i />
-      </span>
-    </span>
+    <span
+      role={label ? 'status' : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+      className={`pcube sprite${still ? ' pcube-still' : ''}`}
+      style={
+        {
+          width: px,
+          height: px,
+          backgroundImage: `url(${sheet})`,
+          backgroundSize: `${px * SPIN_FRAMES}px ${px}px`,
+          backgroundPositionX: still ? -px * 3 : undefined,
+          '--pcube-run': `${-px * SPIN_FRAMES}px`,
+        } as CSSProperties
+      }
+    />
   )
 }
 

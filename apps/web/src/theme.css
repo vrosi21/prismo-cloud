@@ -33,14 +33,14 @@
 
 /* Multiverse: the void outside the cube */
 [data-theme="multiverse"] {
-  --bg: #120d2b;
-  --bg-deep: #0a0720;
-  --panel: #1f1747;
-  --panel-2: #2b2163;
-  --ink: #f1eaff;
-  --ink-dim: #a99cd6;
-  --line: #9484e6;
-  --shadow: #05030f;
+  --bg: #1a3890;
+  --bg-deep: #122a72;
+  --panel: #17205c;
+  --panel-2: #222d78;
+  --ink: #eef0ff;
+  --ink-dim: #a6afe8;
+  --line: #8b84f0;
+  --shadow: #090f3a;
   --accent: #f48fb1;
   --accent-deep: #d9608c;
   --on-accent: #2a1a3e;
@@ -389,47 +389,29 @@ select.field { appearance: none; cursor: pointer; padding-right: 26px;
   overflow: hidden;
 }
 
-/* One tiny element; every star is one box-shadow of it. Three layers at
-   different speeds give depth for almost no work. */
-.stars {
+/* Multiverse: the sky is one small canvas scaled up; rocks drift on their
+   own clocks; the cube in the middle turns through its sprite sheet. */
+.mv-sky { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mv-rock {
   position: absolute;
-  top: 0;
-  left: 0;
-  background: transparent;
-  animation: drift linear infinite;
+  transform: translate(-50%, -50%);
+  animation: mv-float var(--dur, 9s) steps(6) infinite alternate;
 }
-.stars-far { width: 2px; height: 2px; animation-duration: 520s; animation-timing-function: steps(520); opacity: 0.55; }
-.stars-mid { width: 3px; height: 3px; animation-duration: 300s; animation-timing-function: steps(500); opacity: 0.8; }
-.stars-near { width: 4px; height: 4px; animation-duration: 170s; animation-timing-function: steps(425); }
-@keyframes drift { to { transform: translateY(-2000px); } }
-
-.twinkle { animation: twinkle 2.4s steps(2, jump-none) infinite; }
-@keyframes twinkle { 50% { opacity: 0.25; } }
-
-.shooting-star {
+@keyframes mv-float { to { translate: 0 var(--drift, 8px); } }
+.mv-cube {
   position: absolute;
-  top: 12%;
-  left: 70%;
-  width: 6px;
-  height: 6px;
-  background: #fff;
-  box-shadow: 6px -6px 0 0 #fff8, 12px -12px 0 0 #fff5, 18px -18px 0 0 #fff3;
-  opacity: 0;
-  animation: shoot 14s steps(24) infinite 4s;
-}
-@keyframes shoot {
-  0% { opacity: 1; transform: translate(0, 0); }
-  7% { opacity: 1; transform: translate(-380px, 380px); }
-  8%, 100% { opacity: 0; transform: translate(-380px, 380px); }
-}
-
-.far-cube {
-  position: absolute;
-  top: 16%;
-  right: 9%;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
   animation: bob 6s steps(6) infinite alternate;
 }
-@keyframes bob { to { transform: translateY(18px); } }
+.mv-cube > span {
+  display: block;
+  background-repeat: no-repeat;
+  animation: mv-spin 14s steps(24) infinite;
+}
+@keyframes mv-spin { to { background-position-x: var(--run); } }
+@keyframes bob { to { transform: translateY(12px); } }
 
 /* Time Room: Prismo's own legs, flat on the floor and folding up the wall.
    Drawn in screen pixels, so the box is the screen. */
@@ -445,51 +427,18 @@ select.field { appearance: none; cursor: pointer; padding-right: 26px;
   86%, 92% { transform: translateY(calc(var(--cell) * -1)); }
 }
 
-/* --- Prismo's cube ---------------------------------------------------------- */
-.cube-scene {
+/* --- Prismo's cube ----------------------------------------------------------
+   A sprite sheet of a quarter turn (see lib/pixelcube.ts), stepped through
+   frame by frame. */
+.pcube {
   display: inline-block;
-  perspective: 600px;
   flex: none;
+  vertical-align: middle;
+  background-repeat: no-repeat;
+  animation: pcube-spin 0.9s steps(8) infinite;
 }
-.cube {
-  position: relative;
-  width: var(--s);
-  height: var(--s);
-  transform-style: preserve-3d;
-  /* steps(): the cube jumps between 24 poses instead of gliding, like a
-     sprite sheet. That one word is what makes it read as pixel art. */
-  animation: cube-spin 2.6s steps(24) infinite;
-}
-.cube > i {
-  position: absolute;
-  inset: 0;
-  display: block;
-  background: var(--cube-side);
-  box-shadow: inset 0 0 0 max(2px, calc(var(--s) / 12)) var(--cube-line);
-  backface-visibility: hidden;
-}
-.cube > i:nth-child(1) { transform: translateZ(calc(var(--s) / 2)); background: var(--cube-front); }
-.cube > i:nth-child(2) { transform: rotateY(180deg) translateZ(calc(var(--s) / 2)); background: var(--cube-front); }
-.cube > i:nth-child(3) { transform: rotateY(90deg) translateZ(calc(var(--s) / 2)); }
-.cube > i:nth-child(4) { transform: rotateY(-90deg) translateZ(calc(var(--s) / 2)); }
-.cube > i:nth-child(5) { transform: rotateX(90deg) translateZ(calc(var(--s) / 2)); background: var(--cube-top); }
-.cube > i:nth-child(6) { transform: rotateX(-90deg) translateZ(calc(var(--s) / 2)); }
-/* Prismo's shadow on one wall, so the turn is readable */
-.cube > i:nth-child(1)::after {
-  content: "";
-  position: absolute;
-  left: 34%;
-  top: 22%;
-  width: 32%;
-  height: 24%;
-  background: var(--cube-figure);
-  box-shadow: 0 calc(var(--s) * 0.3) 0 calc(var(--s) * 0.06) var(--cube-figure);
-}
-.cube-still { animation: none; transform: rotateX(-22deg) rotateY(-36deg); }
-@keyframes cube-spin {
-  from { transform: rotateX(-22deg) rotateY(0deg); }
-  to { transform: rotateX(-22deg) rotateY(-360deg); }
-}
+.pcube-still { animation: none; }
+@keyframes pcube-spin { to { background-position-x: var(--pcube-run); } }
 
 /* --- Small animations -------------------------------------------------------- */
 .pop { animation: pop 0.16s steps(3) both; }
@@ -499,8 +448,8 @@ select.field { appearance: none; cursor: pointer; padding-right: 26px;
 @keyframes eye-blink { 0%, 94% { transform: scaleY(1); } 95%, 100% { transform: scaleY(0.15); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .stars, .twinkle, .shooting-star, .far-cube, .face-eye, .pop, .pov-tap { animation: none; }
-  .cube { animation: cube-pulse 1.2s steps(2, jump-none) infinite; transform: rotateX(-22deg) rotateY(-36deg); }
+  .mv-rock, .mv-cube, .mv-cube > span, .face-eye, .pop, .pov-tap { animation: none; }
+  .pcube:not(.pcube-still) { animation: cube-pulse 1.2s steps(2, jump-none) infinite; background-position-x: 0; }
   @keyframes cube-pulse { to { opacity: 0.45; } }
 }
 

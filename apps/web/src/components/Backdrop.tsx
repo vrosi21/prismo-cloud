@@ -1,58 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { useRef, useMemo, type CSSProperties } from 'react'
+import { useSize } from '../lib/size'
 import { useTheme } from '../lib/theme'
-import { Cube } from './sprites'
-
-// Seeded random numbers: the sky looks the same on every load.
-function mulberry32(seed: number) {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-const SKY_HEIGHT = 2000
-
-// Every star is one box-shadow. Each is listed twice, one sky-height apart,
-// so the layer can scroll up by exactly that height and loop without a seam.
-function starField(seed: number, count: number, colors: string[], repeat = true): string {
-  const rnd = mulberry32(seed)
-  const shadows: string[] = []
-  for (let i = 0; i < count; i++) {
-    const x = Math.floor(rnd() * 3200)
-    const y = Math.floor(rnd() * SKY_HEIGHT)
-    const color = colors[Math.floor(rnd() * colors.length)]
-    shadows.push(`${x}px ${y}px 0 0 ${color}`)
-    if (repeat) shadows.push(`${x}px ${y + SKY_HEIGHT}px 0 0 ${color}`)
-  }
-  return shadows.join(',')
-}
-
-function Multiverse() {
-  const layers = useMemo(
-    () => ({
-      far: starField(11, 260, ['#8f7fe0', '#c9bfff', '#6a5bbf']),
-      mid: starField(23, 120, ['#f1eaff', '#f48fb1', '#5fe0d6']),
-      near: starField(37, 45, ['#ffffff', '#ffe680']),
-      blink: starField(53, 28, ['#ffffff', '#f48fb1'], false),
-    }),
-    [],
-  )
-  return (
-    <div className="backdrop" aria-hidden>
-      <div className="stars stars-far" style={{ boxShadow: layers.far }} />
-      <div className="stars stars-mid" style={{ boxShadow: layers.mid }} />
-      <div className="stars stars-near" style={{ boxShadow: layers.near }} />
-      <div className="twinkle absolute left-0 top-0 h-[3px] w-[3px]" style={{ boxShadow: layers.blink }} />
-      <div className="shooting-star" />
-      {/* The Time Room itself, far away in the void. */}
-      <div className="far-cube opacity-80">
-        <Cube size={18} />
-      </div>
-    </div>
-  )
-}
+import { Multiverse } from './Multiverse'
 
 // --- Prismo, through his own eyes --------------------------------------------
 // Prismo is flat: a pink shape painted on the room, not a body standing in it.
@@ -155,22 +104,6 @@ function paint(width: number, height: number): Painting {
     }
   }
   return { cell, ...runs }
-}
-
-function useSize(ref: RefObject<Element | null>): [number, number] {
-  const [size, setSize] = useState<[number, number]>(() => [window.innerWidth, window.innerHeight])
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const ro = new ResizeObserver(([entry]) => {
-      const w = Math.round(entry.contentRect.width)
-      const h = Math.round(entry.contentRect.height)
-      setSize((old) => (old[0] === w && old[1] === h ? old : [w, h]))
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [ref])
-  return size
 }
 
 function Runs({ runs, cell, className, style }: { runs: Run[]; cell: number; className?: string; style?: CSSProperties }) {
