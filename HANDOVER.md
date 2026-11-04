@@ -36,7 +36,7 @@ not, click "development sign-in". Theme is in localStorage `prismo.theme`
 
 ## Plan and status
 
-1. [ ] Keyboard navigation: arrows move focus spatially (by position on
+1. [x] Keyboard navigation: arrows move focus spatially (by position on
        screen) across the whole app; dialogs trap it; the gallery moves by
        grid index and scrolls its virtual list; Enter opens, Space selects
        or activates; focus returns to the tile after the viewer closes;
@@ -52,3 +52,13 @@ not, click "development sign-in". Theme is in localStorage `prismo.theme`
 ## Log
 
 - Start of the overhaul. Plan written.
+- Step 1 done. `apps/web/src/lib/spatial.ts` (mounted by `useKeyboardNav()`
+  in `App.tsx`) moves focus by screen position on arrows, inside the top
+  `[aria-modal]` dialog if one is open. Opt out with `tabindex="-1"`, opt in
+  without Tab with `data-nav`. `[data-nav-item]` marks files and folders (the
+  start point, and they lift on focus). Space clicks links and `role=button`;
+  Backspace closes the top dialog or goes back. The gallery (`Gallery.tsx`)
+  moves by grid index, scrolls its virtual list, and fetches more on Down
+  at the end; `focus` prop puts focus back on a tile (used when the viewer
+  closes). The viewer (`AssetModal.tsx`) focuses its picture: Left/Right
+  step files, Up/Down go to its buttons. Tested with Playwright key presses.

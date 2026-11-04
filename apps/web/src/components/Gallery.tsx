@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Asset } from '../api'
 import { endAssetDrag, startAssetDrag } from '../lib/drag'
 import { displayName, duration } from '../lib/format'
+import { focusEl } from '../lib/spatial'
 import { BmoFace, Cube } from './sprites'
 
 const GAP = 20
@@ -26,12 +27,14 @@ interface GalleryProps {
   hasMore: boolean
   loadingMore: boolean
   loadMore: () => void
+  /** Put keyboard focus on this file's tile (n changes to ask again). */
+  focus?: { id: string; n: number } | null
 }
 
 // Only the rows near the viewport exist in the DOM. A library of 50,000
 // items scrolls like one of 50, because the page never holds more than a
 // few dozen tiles at once.
-export function Gallery({ assets, selected, selectable = true, header, empty, onOpen, onSelect, hasMore, loadingMore, loadMore }: GalleryProps) {
+export function Gallery({ assets, selected, selectable = true, header, empty, onOpen, onSelect, hasMore, loadingMore, loadMore, focus }: GalleryProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const track = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
@@ -79,8 +82,63 @@ export function Gallery({ assets, selected, selectable = true, header, empty, on
 
   const selecting = selected.size > 0
 
+  // Arrows move through the grid by position in the list, so a tile that is
+  // not drawn yet (far down the virtual list) can still be reached: scroll
+  // its row in, then focus it once it exists. Past the edge of the grid the
+  // key is left to the page, which moves on to the sidebar or the toolbar.
+  const pending = useRef<number | null>(null)
+  const focusIndex = useCallback(
+    (i: number) => {
+      const el = scroller.current?.querySelector<HTMLElement>(`[data-index="${i}"]`)
+      if (el) {
+        pending.current = null
+        focusEl(el)
+      } else {
+        pending.current = i
+        virtual.scrollToIndex(Math.floor(i / cols), { align: 'auto' })
+      }
+    },
+    [virtual, cols],
+  )
+  useEffect(() => {
+    const i = pending.current
+    if (i === null) return
+    if (i < assets.length) focusIndex(i)
+    else if (!hasMore && !loadingMore) focusIndex(assets.length - 1)
+  })
+  const latest = useRef({ assets, focusIndex })
+  latest.current = { assets, focusIndex }
+  useEffect(() => {
+    if (!focus) return
+    const i = latest.current.assets.findIndex((a) => a.id === focus.id)
+    if (i >= 0) latest.current.focusIndex(i)
+  }, [focus])
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const at = e.target instanceof HTMLElement ? e.target.dataset.index : undefined
+    if (at === undefined || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+    const i = Number(at)
+    const n = assets.length
+    const col = i % cols
+    let next: number | null = null
+    if (e.key === 'ArrowDown' && Math.floor(i / cols) < Math.floor((n - 1) / cols)) next = Math.min(i + cols, n - 1)
+    else if (e.key === 'ArrowUp' && i >= cols) next = i - cols
+    else if (e.key === 'ArrowRight' && col < cols - 1 && i + 1 < n) next = i + 1
+    else if (e.key === 'ArrowLeft' && col > 0) next = i - 1
+    if (next === null && e.key === 'ArrowDown' && hasMore) {
+      // The last row so far: fetch more and go down once they are in.
+      e.preventDefault()
+      pending.current = i + cols
+      if (!loadingMore) loadMore()
+      return
+    }
+    if (next === null) return
+    e.preventDefault()
+    focusIndex(next)
+  }
+
   return (
-    <div ref={scroller} className="relative h-full overflow-y-auto px-2 pt-2">
+    <div ref={scroller} className="relative h-full overflow-y-auto px-2 pt-2" onKeyDown={onKeyDown}>
       <div>{header}</div>
       <div ref={track} className="relative" style={{ height: virtual.getTotalSize() }}>
         {items.map((row) => (
@@ -89,9 +147,10 @@ export function Gallery({ assets, selected, selectable = true, header, empty, on
             className="absolute left-0 top-0 flex w-full"
             style={{ transform: `translateY(${row.start - offset}px)`, gap: GAP, height: rowHeight }}
           >
-            {assets.slice(row.index * cols, row.index * cols + cols).map((asset) => (
+            {assets.slice(row.index * cols, row.index * cols + cols).map((asset, j) => (
               <AssetCard
                 key={asset.id}
+                index={row.index * cols + j}
                 asset={asset}
                 size={tile}
                 selected={selected.has(asset.id)}
@@ -116,6 +175,7 @@ export function Gallery({ assets, selected, selectable = true, header, empty, on
 }
 
 interface CardProps {
+  index: number
   asset: Asset
   size: number
   selected: boolean
@@ -126,7 +186,7 @@ interface CardProps {
   onSelect: (asset: Asset, mode: SelectMode) => void
 }
 
-function AssetCard({ asset, size, selected, selection, selecting, selectable, onOpen, onSelect }: CardProps) {
+function AssetCard({ index, asset, size, selected, selection, selecting, selectable, onOpen, onSelect }: CardProps) {
   const [hover, setHover] = useState(false)
   const ready = asset.status === 'ready'
   const still = asset.urls.thumb ?? (asset.kind === 'image' || asset.kind === 'sticker' ? asset.urls.file : undefined)
@@ -150,6 +210,8 @@ function AssetCard({ asset, size, selected, selection, selecting, selectable, on
       <div
         role="button"
         tabIndex={0}
+        data-nav-item
+        data-index={index}
         aria-label={`${displayName(asset)}${selected ? ', selected' : ''}`}
         className={`group relative block cursor-pointer overflow-hidden bg-bg-deep ${selected ? 'px-accent' : 'px'}`}
         style={{ width: size, height: size }}
@@ -216,6 +278,7 @@ function AssetCard({ asset, size, selected, selection, selecting, selectable, on
         {selectable && (
           <button
             type="button"
+            tabIndex={-1}
             aria-label={selected ? 'deselect' : 'select'}
             aria-pressed={selected}
             onClick={(e) => {

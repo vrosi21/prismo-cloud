@@ -1,10 +1,11 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api, type Asset, type AssetPatch, type BulkAction, type Kind, type Visibility } from '../api'
 import type { FolderNode } from '../lib/folders'
 import { bytes, copyImage, copyText, displayName, duration, when } from '../lib/format'
 import { errorText, log } from '../lib/log'
 import { useRefreshLibrary } from '../lib/queries'
+import { focusEl, navScope } from '../lib/spatial'
 import { ShareDialog } from './ShareDialog'
 
 // Only fetched when somebody makes a sticker.
@@ -33,32 +34,60 @@ export function AssetModal({ asset, folders, onClose, onStep }: Props) {
     }
   }, [])
 
+  // The picture side has focus when the viewer opens. There, Left and Right
+  // step through the files and Up or Down goes over to the buttons; on the
+  // buttons, arrows move between them as everywhere else. Taken before the
+  // page's own arrow handling (capture), which then leaves the key alone.
+  const dialog = useRef<HTMLDivElement>(null)
+  const stage = useRef<HTMLDivElement>(null)
+  const details = useRef<HTMLDivElement>(null)
+  useEffect(() => stage.current?.focus({ preventScroll: true }), [])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select')
-      if (e.key === 'Escape') onClose()
-      else if (!typing && e.key === 'ArrowRight') onStep(1)
-      else if (!typing && e.key === 'ArrowLeft') onStep(-1)
+      // A dialog opened from here (share, sticker) has the keys while open.
+      if (navScope() !== dialog.current) return
+      if (e.key === 'Escape') return onClose()
+      const active = document.activeElement
+      const onStage = active === stage.current || active === document.body || !dialog.current?.contains(active)
+      if (!onStage || e.altKey || e.ctrlKey || e.metaKey) return
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault()
+        onStep(e.key === 'ArrowRight' ? 1 : -1)
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const first = details.current?.querySelector<HTMLElement>('button, input, select, a[href]')
+        if (first) {
+          e.preventDefault()
+          focusEl(first)
+        }
+      }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose, onStep])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-8" role="dialog" aria-modal="true" aria-label={displayName(asset)}>
+    <div ref={dialog} className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-8" role="dialog" aria-modal="true" aria-label={displayName(asset)}>
       <div className="absolute inset-0 bg-black/75" onClick={onClose} />
       <div className="panel px pop relative flex max-h-full w-full max-w-[1180px] flex-col overflow-hidden md:flex-row">
-        <div className="relative flex min-h-[220px] flex-1 items-center justify-center bg-bg-deep p-3 md:min-h-[480px]">
+        <div
+          ref={stage}
+          tabIndex={-1}
+          data-nav
+          aria-label="left and right: previous and next file"
+          className="stage relative flex min-h-[220px] flex-1 items-center justify-center bg-bg-deep p-3 md:min-h-[480px]"
+        >
           <Preview asset={asset} />
-          <button type="button" className="btn btn-sm absolute left-3 top-1/2" onClick={() => onStep(-1)} aria-label="previous">
+          <button type="button" tabIndex={-1} className="btn btn-sm absolute left-3 top-1/2" onClick={() => onStep(-1)} aria-label="previous">
             &lt;
           </button>
-          <button type="button" className="btn btn-sm absolute right-3 top-1/2" onClick={() => onStep(1)} aria-label="next">
+          <button type="button" tabIndex={-1} className="btn btn-sm absolute right-3 top-1/2" onClick={() => onStep(1)} aria-label="next">
             &gt;
           </button>
         </div>
         {/* key: a fresh form per asset, so typed text never leaks to the next one */}
-        <Details key={asset.id} asset={asset} folders={folders} onClose={onClose} />
+        <div ref={details} className="contents">
+          <Details key={asset.id} asset={asset} folders={folders} onClose={onClose} />
+        </div>
       </div>
     </div>
   )

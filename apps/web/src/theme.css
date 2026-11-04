@@ -131,9 +131,18 @@ h3 { font-size: 9px; }
 }
 
 :focus-visible {
-  outline: var(--px) dashed var(--teal);
+  outline: var(--px) solid var(--teal);
   outline-offset: var(--px);
 }
+/* Files and folders: the one with focus lifts a step, so the place you are
+   at in a long grid is easy to find. Room around it when scrolled to. */
+[data-nav-item] { scroll-margin: 18px; }
+[data-nav-item]:focus-visible {
+  outline-width: calc(var(--px) * 2);
+  outline-offset: calc(var(--px) * 2);
+  transform: translateY(calc(var(--px) * -1));
+}
+.stage:focus-visible { outline-offset: calc(var(--px) * -2); }
 
 * {
   scrollbar-color: var(--line) var(--bg-deep);

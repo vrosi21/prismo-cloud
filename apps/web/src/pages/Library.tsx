@@ -52,6 +52,8 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const anchor = useRef<string | null>(null) // where a Shift-click range starts
   const [openId, setOpenId] = useState<string | null>(null)
+  // After the viewer closes, focus goes back to the tile of what was open.
+  const [focusTile, setFocusTile] = useState<{ id: string; n: number } | null>(null)
   const [panel, setPanel] = useState<Panel>(null)
   const [sharing, setSharing] = useState(false)
   const [confirmPurge, setConfirmPurge] = useState(false)
@@ -142,7 +144,10 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
     },
     [assets, openId],
   )
-  const close = useCallback(() => setOpenId(null), [])
+  const close = useCallback(() => {
+    if (openId) setFocusTile({ id: openId, n: Date.now() })
+    setOpenId(null)
+  }, [openId])
 
   const { fetchNextPage } = query
   const loadMore = useCallback(() => void fetchNextPage(), [fetchNextPage])
@@ -357,6 +362,7 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
             hasMore={query.hasNextPage}
             loadingMore={query.isFetchingNextPage}
             loadMore={loadMore}
+            focus={focusTile}
           />
         )}
       </div>
@@ -385,7 +391,7 @@ function FolderTile({ folder, onMoved }: { folder: FolderNode; onMoved: () => vo
   const drop = useAssetDrop(folder.id, folder.name, onMoved)
   const inside = folder.children.length > 0 ? `${folder.count} files, ${folder.children.length} folders` : `${folder.count} files`
   return (
-    <Link to={`/?folder=${folder.id}`} className={`folder-tile ${drop.over ? 'drop-over' : ''}`} title={`${folder.name}: ${inside}`} {...drop.handlers}>
+    <Link to={`/?folder=${folder.id}`} data-nav-item className={`folder-tile ${drop.over ? 'drop-over' : ''}`} title={`${folder.name}: ${inside}`} {...drop.handlers}>
       <FolderIcon />
       <span className="min-w-0 flex-1 truncate">{folder.name}</span>
       <span className="dim shrink-0">{folder.count}</span>

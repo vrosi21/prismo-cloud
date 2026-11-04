@@ -398,6 +398,9 @@ function StatusBar({ email, member }: { email: string; member: boolean }) {
         </span>
       )}
       <span className="flex-1" />
+      <span className="dim hidden truncate xl:inline" title="keys">
+        arrows move · enter open · space select · backspace back
+      </span>
       <span className="dim hidden truncate lg:inline">{email}</span>
       <button type="button" className="chip shrink-0" onClick={() => setScanlines(!scanlines)} aria-pressed={scanlines}>
         scanlines

@@ -7,6 +7,7 @@ import { BmoFace, Cube } from './components/sprites'
 import { forgetInvite, inviteToken } from './lib/invite'
 import { errorText } from './lib/log'
 import { useMe } from './lib/queries'
+import { useKeyboardNav } from './lib/spatial'
 import { Library } from './pages/Library'
 import { Login } from './pages/Login'
 import { Settings } from './pages/Settings'
@@ -37,6 +38,7 @@ function InviteLanding() {
 }
 
 export function App() {
+  useKeyboardNav()
   const me = useMe()
   // Latched on purpose. While "who am I" is being re-asked its error is
   // cleared for a moment; deriving this straight from the query would swap
