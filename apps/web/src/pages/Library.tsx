@@ -294,14 +294,14 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
 
   const emptyNote = flat ? (
     <Centered>
-      <Prismo scale={7} />
+      <Prismo />
       <p>{trashed ? '> trash is empty.' : '> nothing matches.'}</p>
     </Centered>
   ) : subfolders.length > 0 ? (
     <p className="dim px-1 py-4">&gt; no files directly in here.</p>
   ) : (
     <Centered>
-      <Prismo scale={7} />
+      <Prismo />
       <p>{folder ? '> this folder is empty.' : '> nothing here yet.'}</p>
       <p className="dim">drop a file anywhere, paste a screenshot, or press "upload".</p>
     </Centered>

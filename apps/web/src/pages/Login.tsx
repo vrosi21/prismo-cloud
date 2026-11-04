@@ -52,10 +52,12 @@ export function Login() {
         : null
 
   return (
-    <div className="relative z-10 flex h-full items-center justify-center overflow-y-auto p-4">
+    // Low on the screen, so the backdrop's centrepiece (the Time Room in the
+    // void, Prismo's feet on the wall) stays in view above it.
+    <div className="relative z-10 flex h-full items-end justify-center overflow-y-auto p-4 pb-[9vh]">
       <div className="flex w-full max-w-[720px] flex-col items-center gap-8 md:flex-row md:items-end md:gap-12">
         <div className="hidden md:block">
-          <Prismo scale={9} />
+          <Prismo scale={3} />
         </div>
         <div className="panel px-raised flex w-full max-w-[400px] flex-col gap-5 p-6">
           <div className="flex items-center gap-4">

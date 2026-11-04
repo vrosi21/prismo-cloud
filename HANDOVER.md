@@ -46,8 +46,8 @@ not, click "development sign-in". Theme is in localStorage `prismo.theme`
 3. [x] Multiverse backdrop: blue void, purple swirl, rocks, sparkles, the
        Time Room big in the middle; palette moved towards the reference.
 4. [x] Restyle panels, tiles, buttons, fields, sidebar, status bar.
-5. [ ] Higher-resolution sprites (Prismo, folder, etc.).
-6. [ ] Final polish, screenshots, this file brought up to date.
+5. [x] Higher-resolution sprites (Prismo, folder, etc.).
+6. [x] Final polish, screenshots, this file brought up to date.
 
 ## Log
 
@@ -80,3 +80,17 @@ not, click "development sign-in". Theme is in localStorage `prismo.theme`
   `.section-title` with a dotted rule; the current row is accent coloured;
   folder tiles lift and show counts in a badge. The gallery sits on a
   `.screen-door` dither so backdrop bits between tiles read as background.
+- Steps 5 and 6 done. `lib/raster.ts` turns shapes (ellipse, stick,
+  polygon) into pixel runs; `Prismo` in `sprites.tsx` is now a 32x56
+  drawing made with it (bumpy head, cyan eye, nose, splayed toes), and the
+  folder icon is 16x13. The header cube is 32 px. The `.screen-door` dither
+  moved from the gallery to `<main>` in `Shell.tsx`, so every page mutes the
+  backdrop behind its panels. The sign-in box sits low on the screen so the
+  Time Room (Multiverse) and the feet on the wall (Time Room) stay in view.
+
+## Ideas for next time
+
+- Pixel art for the remaining small UI bits (twist +/-, select arrows).
+- Thumbnails for the mock data (it only has zips), to judge the cards with
+  real pictures.
+- A short key guide in Settings, next to the theme picker.

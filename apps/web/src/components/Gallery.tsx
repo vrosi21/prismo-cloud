@@ -138,7 +138,7 @@ export function Gallery({ assets, selected, selectable = true, header, empty, on
   }
 
   return (
-    <div ref={scroller} className="screen-door relative h-full overflow-y-auto px-3 pt-3" onKeyDown={onKeyDown}>
+    <div ref={scroller} className="relative h-full overflow-y-auto px-3 pt-3" onKeyDown={onKeyDown}>
       <div>{header}</div>
       <div ref={track} className="relative" style={{ height: virtual.getTotalSize() }}>
         {items.map((row) => (

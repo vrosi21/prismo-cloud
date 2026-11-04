@@ -391,7 +391,7 @@ select.field { appearance: none; cursor: pointer; padding-right: 26px;
 .folder-tile:hover { background: var(--panel-2); transform: translateY(calc(var(--px) * -1)); }
 .folder-tile .count-badge { padding: 0 6px; background: var(--bg-deep); color: var(--ink-dim); }
 
-/* Behind the files the room shows through a screen door: every other
+/* Behind the page the room shows through a screen door: every other
    pixel is the background colour, the old way of drawing see-through. Bits
    of backdrop between tiles then read as the room behind, not as clutter. */
 .screen-door {

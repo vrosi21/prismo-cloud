@@ -131,7 +131,7 @@ export function SharedFolderPage() {
       <p className="dim px-1 py-4">&gt; no files directly in here.</p>
     ) : (
       <Centered>
-        <Prismo scale={7} />
+        <Prismo />
         <p>&gt; this folder is empty.</p>
         {canAdd && <p className="dim">drop a file anywhere, paste a screenshot, or press "upload".</p>}
       </Centered>
@@ -160,7 +160,7 @@ export function SharedItems() {
         assets={items}
         empty={
           <Centered>
-            <Prismo scale={7} />
+            <Prismo />
             <p>&gt; no single files are shared with you.</p>
           </Centered>
         }
@@ -183,7 +183,7 @@ export function SharedHome() {
   if (shared.data?.items.length) return <Navigate to="/shared/items" replace />
   return (
     <Centered>
-      <Prismo scale={7} />
+      <Prismo />
       <p>&gt; nothing is shared with you right now.</p>
       <p className="dim">when someone shares a folder or a file with this google account, it shows up here.</p>
     </Centered>

@@ -137,7 +137,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
           menu
         </button>
         <Link to="/" className="flex items-center gap-3" aria-label="Prismo Cloud, all files">
-          <Cube size={22} still />
+          <Cube size={32} still />
           <h1 className="hidden sm:block">PRISMO CLOUD</h1>
         </Link>
         {me.member ? <SearchBox key={params.get('q') ?? ''} initial={params.get('q') ?? ''} onSearch={search} /> : <span className="flex-1" />}
@@ -163,7 +163,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
 
       <div className="flex min-h-0 flex-1 gap-3 p-3">
         <Sidebar open={menuOpen} member={me.member} tree={tree} />
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="screen-door min-w-0 flex-1">{children}</main>
       </div>
 
       <StatusBar email={me.user.email} member={me.member} />

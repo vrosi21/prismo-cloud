@@ -1,5 +1,6 @@
 import { useMemo, type CSSProperties } from 'react'
 import { cubeSheet, themeCube } from '../lib/pixelcube'
+import { any, ellipse, polygon, raster, stick } from '../lib/raster'
 import { useTheme } from '../lib/theme'
 
 const SPIN_FRAMES = 8
@@ -78,42 +79,55 @@ export function BmoFace({ mood, scale = 2 }: { mood: Mood; scale?: number }) {
   )
 }
 
-const PRISMO = [
-  '....####....',
-  '...######...',
-  '..########..',
-  '..#.####.#..',
-  '..########..',
-  '...######...',
-  '....####....',
-  '.....##.....',
-  '..########..',
-  '.##########.',
-  '##.######.##',
-  '#..######..#',
-  '#..######..#',
-  '...######...',
-  '...######...',
-  '...##..##...',
-  '...##..##...',
-  '..###..###..',
-]
+// The wishmaster, flat and pink, on a 32x56 grid: the bumpy back of his
+// head, a long nose, one big eye, skinny limbs and toes that splay out.
+const PRISMO_W = 32
+const PRISMO_H = 56
+const PRISMO_RUNS = (() => {
+  const head = any(
+    ellipse(16.5, 11.5, 8.5, 10.5),
+    ellipse(9.5, 4.5, 3.6),
+    ellipse(7.5, 9.5, 3.8),
+    ellipse(7.5, 15, 3.8),
+    ellipse(9.5, 19.5, 3.4),
+    ellipse(13.5, 2, 2.8),
+    polygon([[23.5, 12.5], [30.6, 17.4], [29.6, 18.6], [23, 18.2]]),
+  )
+  const limb = (pts: [number, number][], r: number) => any(...pts.slice(1).map((p, i) => stick(pts[i][0], pts[i][1], p[0], p[1], r)))
+  const side = (m: 1 | -1) => {
+    const x = (v: number) => 16 + m * (v - 16)
+    return any(
+      limb([[x(13.6), 28.5], [x(9.2), 33], [x(8.2), 38.6]], 1.15),
+      limb([[x(14.6), 37], [x(13.2), 50.2]], 1.55),
+      stick(x(13.2), 51, x(8.6), 52.6, 1.55, 1.75),
+      stick(x(9.6), 52.1, x(6.6), 50.6, 0.95),
+      stick(x(9.8), 53.1, x(6.6), 54, 0.95),
+    )
+  }
+  const body = any(head, stick(16, 20, 16, 27, 1.7), stick(16, 27, 16, 38, 3.3, 2.6), side(1), side(-1))
+  const eye = ellipse(20, 10, 3.9, 2.5)
+  return raster(PRISMO_W, PRISMO_H, [
+    { fill: 'var(--accent)', shape: body },
+    { fill: '#ffffff', shape: eye },
+    { fill: '#19c9f0', shape: (x, y) => eye(x, y) && ellipse(18.8, 10, 1.7, 2.4)(x, y) },
+    { fill: '#ffffff', shape: polygon([[18.4, 19.5], [24, 19.1], [24.4, 20.5], [18.8, 21]]) },
+  ])
+})()
 
-// The wishmaster as a flat shadow on the wall. Shown where there is nothing
-// else to show: empty pages and the sign-in screen.
-export function Prismo({ scale = 6 }: { scale?: number }) {
+// Shown where there is nothing else to show: empty pages and the sign-in screen.
+export function Prismo({ scale = 3 }: { scale?: number }) {
   return (
     <svg
-      viewBox={`0 0 12 ${PRISMO.length}`}
-      width={12 * scale}
-      height={PRISMO.length * scale}
+      viewBox={`0 0 ${PRISMO_W} ${PRISMO_H}`}
+      width={PRISMO_W * scale}
+      height={PRISMO_H * scale}
       shapeRendering="crispEdges"
       className="sprite"
       aria-hidden
     >
-      {PRISMO.flatMap((row, y) =>
-        [...row].map((c, x) => (c === '#' ? <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill="var(--accent)" /> : null)),
-      )}
+      {PRISMO_RUNS.map((r) => (
+        <rect key={`${r.x}-${r.y}`} x={r.x} y={r.y} width={r.w} height="1" fill={r.fill} />
+      ))}
     </svg>
   )
 }
@@ -130,13 +144,15 @@ export function Blocks({ value }: { value: number }) {
   )
 }
 
-// A folder, on a 14x11 grid.
+// A folder, on a 16x13 grid: tab and back in the deep accent, the front flap
+// in the accent with a lit top edge.
 export function FolderIcon({ scale = 2 }: { scale?: number }) {
   return (
-    <svg viewBox="0 0 14 11" width={14 * scale} height={11 * scale} shapeRendering="crispEdges" className="sprite shrink-0" aria-hidden>
-      <path fill="var(--line)" d="M1 0h5v1h1v1h6v1h1v7h-1v1H1v-1H0V1h1z" />
-      <path fill="var(--accent)" d="M1 1h4v1h1v1h7v7H1z" />
-      <path fill="var(--panel-2)" d="M1 4h12v6H1z" />
+    <svg viewBox="0 0 16 13" width={16 * scale} height={13 * scale} shapeRendering="crispEdges" className="sprite shrink-0" aria-hidden>
+      <path fill="var(--line)" d="M1 0h5v1h1v1h8v1h1v9h-1v1H1v-1H0V1h1z" />
+      <path fill="var(--accent-deep)" d="M1 1h4v1h1v1h9v8H1z" />
+      <path fill="var(--accent)" d="M1 5h14v6H1z" />
+      <path fill="var(--hi)" d="M1 4h14v1H1z" />
     </svg>
   )
 }
