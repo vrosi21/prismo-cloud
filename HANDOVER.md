@@ -49,6 +49,15 @@ not, click "development sign-in". Theme is in localStorage `prismo.theme`
 5. [x] Higher-resolution sprites (Prismo, folder, etc.).
 6. [x] Final polish, screenshots, this file brought up to date.
 
+Second round (asked for: all three "ideas for next time"):
+
+7. [ ] Pixel art for the folder tree's +/- and the arrow on dropdowns.
+8. [ ] Sample pictures in the mock API (screenshots, photos, phone
+       captures, stickers with see-through backgrounds, animated gifs,
+       video stills) in mixed sizes, some at the top level, so the file
+       cards can be judged with real-looking pictures.
+9. [ ] A short key guide in Settings, next to the theme picker.
+
 ## Log
 
 - Start of the overhaul. Plan written.
@@ -87,10 +96,8 @@ not, click "development sign-in". Theme is in localStorage `prismo.theme`
   moved from the gallery to `<main>` in `Shell.tsx`, so every page mutes the
   backdrop behind its panels. The sign-in box sits low on the screen so the
   Time Room (Multiverse) and the feet on the wall (Time Room) stay in view.
+- Second round started: steps 7 to 9 added to the plan.
 
 ## Ideas for next time
 
-- Pixel art for the remaining small UI bits (twist +/-, select arrows).
-- Thumbnails for the mock data (it only has zips), to judge the cards with
-  real pictures.
-- A short key guide in Settings, next to the theme picker.
+- (The three earlier ideas are steps 7 to 9 above.)
