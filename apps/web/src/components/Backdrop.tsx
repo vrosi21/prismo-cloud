@@ -54,6 +54,106 @@ function Multiverse() {
   )
 }
 
+// --- Prismo's legs, seen through his own eyes --------------------------------
+// He is lying back on the Time Room floor, looking down the length of himself
+// at the far wall, feet up. Each limb is a tapered stick worked out on a coarse
+// grid, so it comes out as chunky pixels like every other sprite here.
+
+const LEGS_W = 160
+const LEGS_H = 80
+
+type Pt = [number, number]
+type Limb = { from: Pt; to: Pt; r0: number; r1: number }
+
+// Where a point sits across a limb: -1 on its left edge as seen on screen,
+// 1 on its right, null if it is outside.
+function across(l: Limb, x: number, y: number): number | null {
+  const [ax, ay] = l.from
+  const dx = l.to[0] - ax
+  const dy = l.to[1] - ay
+  const len2 = dx * dx + dy * dy
+  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2))
+  const r = l.r0 + (l.r1 - l.r0) * t
+  const px = x - (ax + dx * t)
+  const py = y - (ay + dy * t)
+  if (px * px + py * py > r * r) return null
+  const side = dy > 0 ? -1 : 1
+  return (side * (py * dx - px * dy)) / Math.sqrt(len2) / r
+}
+
+// Thighs come in from below the screen, wide because they are close; the
+// shins run off towards the far wall and the feet turn out, toes up, the way
+// they do on his little sprite. Mirrored left to right.
+const mirror = ({ from, to, r0, r1 }: Limb): Limb => ({
+  from: [LEGS_W - from[0], from[1]],
+  to: [LEGS_W - to[0], to[1]],
+  r0,
+  r1,
+})
+const LEG: Limb = { from: [30, 104], to: [67, 47], r0: 20, r1: 4.2 }
+const FOOT: Limb = { from: [67, 48], to: [57, 27], r0: 4.4, r1: 7 }
+// The bottom of his body, just showing between the thighs.
+const BELLY: Limb = { from: [60, 104], to: [100, 104], r0: 27, r1: 27 }
+
+type Run = { x: number; y: number; w: number; fill: string }
+
+// Light from the left: the right edge of every limb sits in shade, unless one
+// flat colour is asked for. Earlier limbs are in front. Neighbouring cells of
+// one colour merge into one rect.
+function rasterize(limbs: Limb[], flat?: string): Run[] {
+  const runs: Run[] = []
+  for (let y = 0; y < LEGS_H; y++) {
+    let cur: Run | null = null
+    for (let x = 0; x < LEGS_W; x++) {
+      let fill: string | null = null
+      for (const l of limbs) {
+        const s = across(l, x + 0.5, y + 0.5)
+        if (s === null) continue
+        fill = flat ?? (s > 0.72 ? 'var(--pov-shade)' : s > 0.2 ? 'var(--accent-deep)' : 'var(--accent)')
+        break
+      }
+      if (cur && fill === cur.fill) {
+        cur.w++
+      } else {
+        if (cur) runs.push(cur)
+        cur = fill ? { x, y, w: 1, fill } : null
+      }
+    }
+    if (cur) runs.push(cur)
+  }
+  return runs
+}
+
+function Runs({ runs, className }: { runs: Run[]; className?: string }) {
+  return (
+    <g className={className}>
+      {runs.map((r) => (
+        <rect key={`${r.x}-${r.y}`} x={r.x} y={r.y} width={r.w} height="1" fill={r.fill} />
+      ))}
+    </g>
+  )
+}
+
+function PovLegs() {
+  const layers = useMemo(
+    () => ({
+      // In his own shadow, so the thighs stand off it.
+      belly: rasterize([BELLY], 'var(--accent-deep)'),
+      legs: rasterize([FOOT, LEG, mirror(LEG)]),
+      // Drawn on its own so it can tap: he is in no hurry.
+      tapper: rasterize([mirror(FOOT)]),
+    }),
+    [],
+  )
+  return (
+    <svg className="pov-legs sprite" viewBox={`0 0 ${LEGS_W} ${LEGS_H}`} shapeRendering="crispEdges">
+      <Runs runs={layers.belly} />
+      <Runs runs={layers.legs} />
+      <Runs runs={layers.tapper} className="pov-tap" />
+    </svg>
+  )
+}
+
 // Inside the cube: back wall, floor and the four edges running to the corners.
 function TimeRoom() {
   const line = { stroke: 'var(--bg-deep)', strokeWidth: 3, vectorEffect: 'non-scaling-stroke' as const, fill: 'none' }
@@ -68,6 +168,7 @@ function TimeRoom() {
         <line x1="100" y1="100" x2="76" y2="74" {...line} />
         <rect x="24" y="16" width="52" height="58" {...line} />
       </svg>
+      <PovLegs />
     </div>
   )
 }

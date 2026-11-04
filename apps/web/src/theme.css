@@ -28,6 +28,7 @@
   --cube-side: #dcae1c;
   --cube-line: #2a1a3e;
   --cube-figure: #f48fb1;
+  --pov-shade: #b84a74; /* the far side of Prismo's legs, one step past --accent-deep */
 }
 
 /* Multiverse: the void outside the cube */
@@ -421,6 +422,23 @@ select.field { appearance: none; cursor: pointer; padding-right: 26px;
 }
 @keyframes bob { to { transform: translateY(18px); } }
 
+/* Time Room: Prismo's own legs, lying down the floor towards the far wall.
+   Sized off the viewport height so the feet land near the back edge of the
+   floor on any screen; capped by width on narrow ones. */
+.pov-legs {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  height: min(48vh, 60vw);
+  aspect-ratio: 2 / 1;
+  transform: translateX(-50%);
+}
+.pov-tap { animation: pov-tap 7s steps(1) infinite; }
+@keyframes pov-tap {
+  0%, 89%, 95% { transform: none; }
+  86%, 92% { transform: translate(1px, -1px); }
+}
+
 /* --- Prismo's cube ---------------------------------------------------------- */
 .cube-scene {
   display: inline-block;
@@ -475,7 +493,7 @@ select.field { appearance: none; cursor: pointer; padding-right: 26px;
 @keyframes eye-blink { 0%, 94% { transform: scaleY(1); } 95%, 100% { transform: scaleY(0.15); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .stars, .twinkle, .shooting-star, .far-cube, .face-eye, .pop { animation: none; }
+  .stars, .twinkle, .shooting-star, .far-cube, .face-eye, .pop, .pov-tap { animation: none; }
   .cube { animation: cube-pulse 1.2s steps(2, jump-none) infinite; transform: rotateX(-22deg) rotateY(-36deg); }
   @keyframes cube-pulse { to { opacity: 0.45; } }
 }
