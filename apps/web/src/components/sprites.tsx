@@ -175,6 +175,18 @@ export function Twist({ open, scale = 2 }: { open: boolean; scale?: number }) {
   )
 }
 
+// An arrow for a key cap, on a 7x7 grid: drawn pointing up and turned for
+// the other three, which keeps every pixel square.
+const TURN = { up: 0, right: 90, down: 180, left: 270 }
+export type ArrowDir = keyof typeof TURN
+export function Arrow({ dir, scale = 2 }: { dir: ArrowDir; scale?: number }) {
+  return (
+    <svg viewBox="0 0 7 7" width={7 * scale} height={7 * scale} shapeRendering="crispEdges" className="sprite" style={{ transform: `rotate(${TURN[dir]}deg)` }} aria-hidden>
+      <path fill="currentColor" d="M3 0h1v1h1v1h1v1h1v1H4v3H3V4H0V3h1V2h1V1h1z" />
+    </svg>
+  )
+}
+
 // A tick for a selected file, on a 7x6 grid.
 export function Check({ scale = 2 }: { scale?: number }) {
   return (

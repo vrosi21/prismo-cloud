@@ -56,7 +56,7 @@ Second round (asked for: all three "ideas for next time"):
        captures, stickers with see-through backgrounds, animated gifs,
        video stills) in mixed sizes, some at the top level, so the file
        cards can be judged with real-looking pictures.
-9. [ ] A short key guide in Settings, next to the theme picker.
+9. [x] A short key guide in Settings, next to the theme picker.
 
 ## Log
 
@@ -115,6 +115,12 @@ Second round (asked for: all three "ideas for next time"):
   runs of seven (photo, desktop, phone, gif, recording, sticker, zip) with
   real sizes and names; photos, recordings and zips are at the top level,
   the rest in their folders (some screenshots in `2026`).
+- Step 9 done. Settings has a "keys" section right under "look"
+  (`Keys`/`KEY_GUIDE` in `pages/Settings.tsx`): pixel key caps (`.key` in
+  `theme.css`, arrows drawn by the new `Arrow` sprite) and what each key does,
+  in groups (everywhere, looking at a file, with files selected, anywhere).
+  It lists only keys the code handles: arrows, Enter, Space, Shift+Space,
+  Backspace, Esc, Ctrl+A, Delete, Ctrl+K. Two columns on wide screens.
 
 ## Ideas for next time
 

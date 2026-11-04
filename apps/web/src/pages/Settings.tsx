@@ -1,16 +1,18 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { Fragment, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, type Me, type Token, type Visibility } from '../api'
 import { copyText, when } from '../lib/format'
 import { errorText, log } from '../lib/log'
 import { useTokens } from '../lib/queries'
 import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/theme'
+import { Arrow, type ArrowDir } from '../components/sprites'
 
 export function Settings({ me }: { me: Me }) {
   return (
     <div className="h-full overflow-y-auto px-2 pt-2">
       <div className="mx-auto flex max-w-[900px] flex-col gap-6 pb-8">
         <Look />
+        <Keys />
         {/* Tokens belong to a library; a guest has none. */}
         {me.member && <CaptureClients publicUrl={me.public_url} />}
         <Account email={me.user.email} />
@@ -45,6 +47,85 @@ function Look() {
         <input type="checkbox" checked={scanlines} onChange={(e) => setScanlines(e.target.checked)} />
         <span>scanlines (never drawn over an open picture)</span>
       </label>
+    </Section>
+  )
+}
+
+// Every key the app answers to. None are letters on their own: those stay
+// free for Vimium and other keyboard browsing add-ons.
+type Cap = ArrowDir | string
+const ARROWS: ArrowDir[] = ['up', 'down', 'left', 'right']
+const KEY_GUIDE: { title?: string; rows: [Cap[], string][] }[] = [
+  {
+    rows: [
+      [ARROWS, 'move to the next thing that way'],
+      [['enter'], 'open a file or folder, or press a button'],
+      [['space'], 'select a file, or press a button or link'],
+      [['shift', 'space'], 'select every file from the last one picked'],
+      [['backspace'], 'close what is open, or go back'],
+      [['esc'], 'close what is open, or clear the selection'],
+    ],
+  },
+  {
+    title: 'looking at a file',
+    rows: [
+      [['left', 'right'], 'the previous or next file'],
+      [['up', 'down'], 'to the buttons beside it'],
+    ],
+  },
+  {
+    title: 'with files selected',
+    rows: [
+      [['ctrl', 'a'], 'select every file here'],
+      [['delete'], 'move them to the trash'],
+    ],
+  },
+  { title: 'anywhere', rows: [[['ctrl', 'k'], 'the command list']] },
+]
+
+function KeyCap({ cap }: { cap: Cap }) {
+  const arrow = (ARROWS as string[]).includes(cap)
+  return (
+    <kbd className="key">
+      {arrow ? <Arrow dir={cap as ArrowDir} /> : cap}
+      {arrow && <span className="sr-only">{cap} arrow</span>}
+    </kbd>
+  )
+}
+
+function KeyGroup({ title, rows }: (typeof KEY_GUIDE)[number]) {
+  return (
+    <div className="flex flex-col gap-3">
+      {title && <h3 className="section-title uppercase !p-0">{title}</h3>}
+      <dl className="keys">
+        {rows.map(([caps, what]) => (
+          <Fragment key={what}>
+            <dt>
+              {caps.map((c) => (
+                <KeyCap key={c} cap={c} />
+              ))}
+            </dt>
+            <dd>{what}</dd>
+          </Fragment>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
+function Keys() {
+  const [main, ...more] = KEY_GUIDE
+  return (
+    <Section title="keys">
+      <div className="grid gap-x-10 gap-y-6 md:grid-cols-2">
+        <KeyGroup {...main} />
+        <div className="flex flex-col gap-6">
+          {more.map((g) => (
+            <KeyGroup key={g.title} {...g} />
+          ))}
+        </div>
+      </div>
+      <p className="dim">&gt; no letter keys on their own: those stay free for vimium and the like.</p>
     </Section>
   )
 }
