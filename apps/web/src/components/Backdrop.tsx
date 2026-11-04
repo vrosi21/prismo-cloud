@@ -124,11 +124,11 @@ function paint(width: number, height: number): Painting {
   const seam = Math.round((SEAM * height) / cell)
   const vanish = (VANISH * height) / cell
   const tall = (wallH / cell) | 0
-  // One leg a little higher than the other: he is lounging, not standing.
   const apart = Math.round((0.16 * u) / cell)
+  const ankle = Math.round(tall * 0.66)
   const legs: Leg[] = [
-    { x: -apart, ankle: Math.round(tall * 0.6), out: -1 },
-    { x: apart, ankle: Math.round(tall * 0.72), out: 1 },
+    { x: -apart, ankle, out: -1 },
+    { x: apart, ankle, out: 1 },
   ]
   const still = [...legs.map(shin), ...foot(legs[0])]
   const tapping = foot(legs[1])
