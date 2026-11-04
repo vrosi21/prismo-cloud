@@ -51,7 +51,7 @@ not, click "development sign-in". Theme is in localStorage `prismo.theme`
 
 Second round (asked for: all three "ideas for next time"):
 
-7. [ ] Pixel art for the folder tree's +/- and the arrow on dropdowns.
+7. [x] Pixel art for the folder tree's +/- and the arrow on dropdowns.
 8. [ ] Sample pictures in the mock API (screenshots, photos, phone
        captures, stickers with see-through backgrounds, animated gifs,
        video stills) in mixed sizes, some at the top level, so the file
@@ -97,6 +97,13 @@ Second round (asked for: all three "ideas for next time"):
   backdrop behind its panels. The sign-in box sits low on the screen so the
   Time Room (Multiverse) and the feet on the wall (Time Room) stay in view.
 - Second round started: steps 7 to 9 added to the plan.
+- Step 7 done. `Twist` in `sprites.tsx` (9x10: a raised box with a plus,
+  pressed in with a minus when open; `--twist-face`/`--twist-sign` recolour
+  it on hover) replaces the text +/- in the folder tree (`Shell.tsx`).
+  In `theme.css`: `select.field` draws a pixel triangle with three gradient
+  rows; checkboxes are sunken squares that turn accent with the pixel tick
+  (a `clip-path` of the `Check` sprite); sliders are a sunken groove with a
+  raised block. Checked in all three themes.
 
 ## Ideas for next time
 

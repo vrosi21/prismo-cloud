@@ -11,7 +11,7 @@ import { uploadTarget } from '../lib/target'
 import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/theme'
 import { uploadFiles, uploads } from '../lib/uploads'
 import { Boot, LogLines, Palette, UploadTray, type Command } from './Overlays'
-import { BmoFace, Cube, type Mood } from './sprites'
+import { BmoFace, Cube, Twist, type Mood } from './sprites'
 
 export const KINDS = [
   { id: 'image', label: 'images' },
@@ -261,7 +261,7 @@ function TreeRow({ node, current, open, toggle, refresh }: TreeProps) {
         <span className="shrink-0" style={{ width: node.depth * 12 }} />
         {node.children.length > 0 ? (
           <button type="button" className="twist" aria-expanded={isOpen} aria-label={`${isOpen ? 'close' : 'open'} ${node.name}`} onClick={() => toggle(node.id)}>
-            {isOpen ? '-' : '+'}
+            <Twist open={isOpen} />
           </button>
         ) : (
           <span className="twist pointer-events-none" aria-hidden />

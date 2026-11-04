@@ -157,6 +157,24 @@ export function FolderIcon({ scale = 2 }: { scale?: number }) {
   )
 }
 
+// The button that opens and closes a folder in the tree, on a 9x10 grid: a
+// small raised box with a plus while the folder is shut, pressed in (down a
+// pixel, its shadow gone, shade on top) with a minus while it is open, the way
+// every button in the app presses. Colours come from --twist-face and
+// --twist-sign, so a hover can recolour it.
+export function Twist({ open, scale = 2 }: { open: boolean; scale?: number }) {
+  const d = open ? 1 : 0
+  return (
+    <svg viewBox="0 0 9 10" width={9 * scale} height={10 * scale} shapeRendering="crispEdges" className="sprite" aria-hidden>
+      {!open && <path fill="var(--shadow)" d="M1 9h7v1H1z" />}
+      <path fill="var(--line)" d={`M1 ${d}h7v1h1v7h-1v1H1v-1H0v-7h1z`} />
+      <path fill="var(--twist-face, var(--panel))" d={`M1 ${1 + d}h7v7H1z`} />
+      <path fill={open ? 'var(--lo)' : 'var(--hi)'} d={`M1 ${1 + d}h7v1H1z`} />
+      <path fill="var(--twist-sign, var(--ink))" d={open ? `M2 ${4 + d}h5v1H2z` : `M2 ${4 + d}h5v1H2zM4 ${2 + d}h1v5H4z`} />
+    </svg>
+  )
+}
+
 // A tick for a selected file, on a 7x6 grid.
 export function Check({ scale = 2 }: { scale?: number }) {
   return (

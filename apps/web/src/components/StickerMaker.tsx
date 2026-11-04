@@ -405,7 +405,7 @@ export function StickerMaker({ asset, onClose }: Props) {
                   <span className="label">how alike a colour must be: {tolerance}</span>
                   <input
                     type="range"
-                    className="w-full accent-[var(--accent-deep)]"
+                    className="w-full"
                     min={1}
                     max={120}
                     value={tolerance}
@@ -422,7 +422,7 @@ export function StickerMaker({ asset, onClose }: Props) {
             {tool === 'rub' && (
               <label>
                 <span className="label">brush size: {brush}</span>
-                <input type="range" className="w-full accent-[var(--accent-deep)]" min={4} max={120} value={brush} onChange={(e) => setBrush(Number(e.target.value))} />
+                <input type="range" className="w-full" min={4} max={120} value={brush} onChange={(e) => setBrush(Number(e.target.value))} />
               </label>
             )}
 
@@ -453,7 +453,7 @@ export function StickerMaker({ asset, onClose }: Props) {
               <input className="field" value={name} maxLength={80} placeholder="happy cat" onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="flex cursor-pointer items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 accent-[var(--accent-deep)]" checked={keepSize} onChange={(e) => setKeepSize(e.target.checked)} />
+              <input type="checkbox" checked={keepSize} onChange={(e) => setKeepSize(e.target.checked)} />
               <span>keep full size (otherwise {STICKER_SIDE} px, as chats show stickers)</span>
             </label>
             <div>

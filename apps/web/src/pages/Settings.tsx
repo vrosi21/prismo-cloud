@@ -42,7 +42,7 @@ function Look() {
       </div>
       <p className="dim">&gt; {THEMES.find((t) => t.id === theme)?.hint}</p>
       <label className="flex cursor-pointer items-center gap-3">
-        <input type="checkbox" className="h-4 w-4 accent-[var(--accent-deep)]" checked={scanlines} onChange={(e) => setScanlines(e.target.checked)} />
+        <input type="checkbox" checked={scanlines} onChange={(e) => setScanlines(e.target.checked)} />
         <span>scanlines (never drawn over an open picture)</span>
       </label>
     </Section>
