@@ -58,6 +58,14 @@ Second round (asked for: all three "ideas for next time"):
        cards can be judged with real-looking pictures.
 9. [x] A short key guide in Settings, next to the theme picker.
 
+Third round (asked for: turn four ways in the room, each wall its own thing,
+by keyboard; one wall is the files, the others placeholders with ideas):
+
+10. [ ] The room: four walls (files in front; time, wishes and lookout as
+        placeholders listing ideas), Ctrl+arrow faces that wall with a
+        stepped 3D turn, a D-pad in the header, Backspace turns back to the
+        files, focus follows the turn, key guide and hints updated.
+
 ## Log
 
 - Start of the overhaul. Plan written.
