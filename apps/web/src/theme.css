@@ -434,30 +434,36 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 .nav-item .count { flex: none; margin-left: auto; padding-left: 6px; opacity: 0.7; }
 .nav-item .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* The room: the four walls in one place, one faced at a time. A turn swings
-   the old wall out and the new one in about a point in front of the screen,
-   as if turning round inside a cube; in steps, like everything that moves
-   here. --turn matches TURN_MS in lib/room.ts. */
-.room { --turn: 420ms; position: relative; perspective: 170vw; }
+/* The room: the four walls in one place, one faced at a time. Turning is a
+   cut, not a move: the wall faced is shown, the others are hidden. */
+.room { position: relative; }
 .wall {
   position: absolute;
   inset: 0;
   display: flex;
   gap: 12px;
   padding: 12px;
-  transform-origin: 50% 50% 46vw;
 }
 .wall[data-state="away"] { visibility: hidden; }
-.wall[data-state="coming"],
-.wall[data-state="going"] { backface-visibility: hidden; pointer-events: none; }
-.room[data-turn="right"] .wall[data-state="going"] { animation: wall-off-left var(--turn) steps(7) both; }
-.room[data-turn="right"] .wall[data-state="coming"] { animation: wall-on-right var(--turn) steps(7) both; }
-.room[data-turn="left"] .wall[data-state="going"] { animation: wall-off-right var(--turn) steps(7) both; }
-.room[data-turn="left"] .wall[data-state="coming"] { animation: wall-on-left var(--turn) steps(7) both; }
-@keyframes wall-off-left { to { transform: rotateY(90deg); } }
-@keyframes wall-on-right { from { transform: rotateY(-90deg); } }
-@keyframes wall-off-right { to { transform: rotateY(-90deg); } }
-@keyframes wall-on-left { from { transform: rotateY(90deg); } }
+
+/* The cut between walls, like an old screen switching camera feeds: a few
+   frames of static and torn lines drawn over everything (FeedCut), while
+   the page underneath jolts sideways and loses its colour for a moment. */
+.feed-cut {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+[data-cut="on"] #root { animation: feed-jolt 200ms steps(1) both; }
+@keyframes feed-jolt {
+  0% { transform: translateX(-9px); filter: grayscale(1) contrast(1.6) brightness(1.3); }
+  30% { transform: translateX(6px); filter: grayscale(0.6) contrast(1.3); }
+  60% { transform: translateX(-2px); filter: none; }
+  100% { transform: none; filter: none; }
+}
 
 /* An empty wall's list of ideas, with pixel bullets. */
 .wall-sign { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: var(--bg-deep); box-shadow: inset 0 var(--px) 0 0 var(--shadow); }
@@ -716,7 +722,7 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 @keyframes eye-blink { 0%, 94% { transform: scaleY(1); } 95%, 100% { transform: scaleY(0.15); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .room .wall { animation: none !important; }
+  [data-cut="on"] #root { animation: none; }
   .mv-rock, .mv-cube, .mv-cube > span, .face-eye, .pop, .pov-tap { animation: none; }
   .pcube:not(.pcube-still) { animation: cube-pulse 1.2s steps(2, jump-none) infinite; background-position-x: 0; }
   @keyframes cube-pulse { to { opacity: 0.45; } }

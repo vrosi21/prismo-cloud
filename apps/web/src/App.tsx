@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router'
 import { api, ApiError } from './api'
 import { Backdrop } from './components/Backdrop'
+import { FeedCut } from './components/FeedCut'
 import { Shell } from './components/Shell'
 import { BmoFace, Cube } from './components/sprites'
 import { forgetInvite, inviteToken } from './lib/invite'
@@ -56,6 +57,7 @@ export function App() {
   return (
     <>
       <Backdrop />
+      <FeedCut />
       {me.data ? (
         <Shell me={me.data}>
           <InviteLanding />

@@ -1,20 +1,23 @@
 import { useRef, useMemo, type CSSProperties } from 'react'
+import { facing } from '../lib/room'
 import { useSize } from '../lib/size'
+import { useStore } from '../lib/store'
 import { useTheme } from '../lib/theme'
 import { Multiverse } from './Multiverse'
 
 // --- Prismo, through his own eyes --------------------------------------------
 // Prismo is flat: a pink shape painted on the room, not a body standing in it.
-// You are him, lying on the floor and looking at the far wall. Your legs run
-// flat along the floor and, where the floor meets the wall, fold and carry on
-// straight up it, feet and all. Worked out for the screen's own size on a grid
-// of big pixels, like every other sprite here.
+// You are him, lying in the middle of the floor. Your legs run flat along the
+// floor towards the wall of the files and, where the floor meets that wall,
+// fold and carry on straight up it, feet and all. Turn to another wall
+// (Ctrl and an arrow) and the room turns with you: the legs are then off to
+// one side, or behind you, and the wall of the lookout is one big window out
+// into the void. Worked out for the screen's own size on a grid of big
+// pixels, like every other sprite here.
 
 // These must match the room TimeRoom draws, as shares of the screen.
 const SEAM = 0.74 // where the floor meets the back wall
 const WALL = { left: 0.24, right: 0.76, top: 0.16 }
-// Where the floor's side edges would meet if carried on.
-const VANISH = 1 - (1 - SEAM) * (0.5 / WALL.left)
 
 type Pt = [number, number]
 type Cap = { a: Pt; b: Pt; r0: number; r1: number }
@@ -62,16 +65,76 @@ function foot({ x, ankle, out }: Leg): Cap[] {
 type Run = { x: number; y: number; w: number; fill: string }
 type Painting = { cell: number; still: Run[]; tapping: Run[] }
 
-function paint(width: number, height: number): Painting {
+// Every wall of the room is drawn the same way: the wall ahead square on, the
+// two beside it running off to the edges of the screen, the floor below. The
+// side walls and the floor start a little behind you, at this depth.
+const NEAR = -0.3
+const depth = (t: number) => NEAR + (1 - NEAR) * t
+
+type Spot = { floor: boolean; x: number; y: number; z: number }
+
+/**
+ * Where in the room a point of the screen is. X and Y are shares of the
+ * screen; the answer is in room units: the room is 2 by 2 by 2, x east, z
+ * north (towards the files), y up from the floor. wall is the wall faced,
+ * clockwise from the files. null for the ceiling.
+ */
+function spot(X: number, Y: number, wall: number): Spot | null {
+  const { left: L, right: R, top: T } = WALL
+  // In the room as seen: across from left to right, ahead, up.
+  let across: number
+  let ahead: number
+  let up: number
+  let floor = false
+  if (X >= L && X <= R && Y >= T && Y < SEAM) {
+    across = ((X - L) / (R - L)) * 2 - 1
+    ahead = 1
+    up = ((SEAM - Y) / (SEAM - T)) * 2
+  } else {
+    const e = (1 - Y) / (1 - SEAM)
+    const fl = L * e
+    const fr = 1 - (1 - R) * e
+    if (Y >= SEAM && X >= fl && X <= fr) {
+      floor = true
+      across = ((X - fl) / (fr - fl)) * 2 - 1
+      ahead = depth(e)
+      up = 0
+    } else {
+      const onLeft = X < 0.5
+      const d = onLeft ? X / L : (1 - X) / (1 - R)
+      const top = T * d
+      const bottom = 1 - (1 - SEAM) * d
+      if (d > 1 || Y < top) return null
+      across = onLeft ? -1 : 1
+      ahead = depth(d)
+      up = ((bottom - Y) / (bottom - top)) * 2
+    }
+  }
+  // Ahead is north for the files, east for the next wall clockwise, and so on.
+  const sin = [0, 1, 0, -1][wall]
+  const cos = [1, 0, -1, 0][wall]
+  return { floor, x: across * cos + ahead * sin, z: -across * sin + ahead * cos, y: up }
+}
+
+// The window that is most of the west wall, the lookout's: in room units
+// along the wall (z) and up from the floor, and the void beyond it in the
+// Multiverse's own colours. Big, because the page covers the middle of
+// whatever wall is faced; this way it shows round the edges too.
+const DOOR = { half: 0.82, bottom: 0.22, top: 1.72 }
+const VOID = '#1f3e9c'
+const VOID_STAR = '#c4b1ff'
+
+function paint(width: number, height: number, wall: number): Painting {
   const wallW = (WALL.right - WALL.left) * width
   const wallH = (SEAM - WALL.top) * height
   const u = Math.min(wallW, wallH)
   const cell = Math.max(3, Math.min(6, Math.round(u / 80)))
   const cols = Math.ceil(width / cell)
   const rows = Math.ceil(height / cell)
-  const mid = Math.round(width / 2 / cell)
-  const seam = Math.round((SEAM * height) / cell)
-  const vanish = (VANISH * height) / cell
+  // Cells per room unit, measured on a wall seen square on: the legs keep
+  // their size whichever wall they are on.
+  const perX = wallW / cell / 2
+  const perY = wallH / cell / 2
   const tall = (wallH / cell) | 0
   const apart = Math.round((0.16 * u) / cell)
   const ankle = Math.round(tall * 0.66)
@@ -81,6 +144,7 @@ function paint(width: number, height: number): Painting {
   ]
   const still = [...legs.map(shin), ...foot(legs[0])]
   const tapping = foot(legs[1])
+  const frame = 1.5 // the door frame, in cells
 
   const runs = { still: [] as Run[], tapping: [] as Run[] }
   const push = (into: Run[], col: number, row: number, fill: string) => {
@@ -89,17 +153,24 @@ function paint(width: number, height: number): Painting {
     else into.push({ x: col * cell, y: row * cell, w: cell, fill })
   }
   for (let row = 0; row < rows; row++) {
-    const cy = row + 0.5
     for (let col = 0; col < cols; col++) {
-      const cx = col + 0.5 - mid
-      if (row >= seam) {
-        // On the floor: undo the perspective and the legs are plain strips.
-        const across = cx * ((seam - vanish) / (cy - vanish))
-        if (legs.some((l) => Math.abs(across - l.x) < HALF)) push(runs.still, col, row, 'var(--pov-floor)')
-      } else {
-        const wy = seam - cy
+      const at = spot(((col + 0.5) * cell) / width, ((row + 0.5) * cell) / height, wall)
+      if (!at) continue
+      if (at.floor) {
+        // The legs, flat on the floor from under you to the files' wall.
+        // Facing the other way they are behind you, out of sight.
+        if (wall !== 2 && legs.some((l) => Math.abs(at.x * perX - l.x) < HALF)) push(runs.still, col, row, 'var(--pov-floor)')
+      } else if (at.z > 0.999) {
+        // Up the files' wall: shins, feet, toes.
+        const cx = at.x * perX
+        const wy = at.y * perY
         if (still.some((c) => inCap(c, cx, wy))) push(runs.still, col, row, 'var(--accent)')
         else if (tapping.some((c) => inCap(c, cx, wy))) push(runs.tapping, col, row, 'var(--accent)')
+      } else if (at.x < -0.999 && Math.abs(at.z) < DOOR.half && at.y > DOOR.bottom && at.y < DOOR.top) {
+        const edge = DOOR.half - Math.abs(at.z) < frame / perX || DOOR.top - at.y < frame / perY || at.y - DOOR.bottom < frame / perY
+        // Stars beyond stay put on the screen: far enough away not to move.
+        const star = !edge && ((col * 73856093) ^ (row * 19349663)) % 37 === 0
+        push(runs.still, col, row, edge ? 'var(--bg-deep)' : star ? VOID_STAR : VOID)
       }
     }
   }
@@ -116,10 +187,10 @@ function Runs({ runs, cell, className, style }: { runs: Run[]; cell: number; cla
   )
 }
 
-function PovLegs() {
+function PovLegs({ wall }: { wall: number }) {
   const ref = useRef<SVGSVGElement>(null)
   const [width, height] = useSize(ref)
-  const art = useMemo(() => paint(width, height), [width, height])
+  const art = useMemo(() => paint(width, height, wall), [width, height, wall])
   return (
     <svg ref={ref} className="pov-legs sprite" viewBox={`0 0 ${width} ${height}`} shapeRendering="crispEdges">
       <Runs runs={art.still} cell={art.cell} />
@@ -129,8 +200,10 @@ function PovLegs() {
   )
 }
 
-// Inside the cube: back wall, floor and the four edges running to the corners.
+// Inside the cube: the wall ahead, floor and the four edges running to the
+// corners. Every wall looks like this; what is on it is PovLegs' business.
 function TimeRoom() {
+  const { wall } = useStore(facing)
   const line = { stroke: 'var(--bg-deep)', strokeWidth: 3, vectorEffect: 'non-scaling-stroke' as const, fill: 'none' }
   return (
     <div className="backdrop" aria-hidden>
@@ -143,7 +216,7 @@ function TimeRoom() {
         <line x1="100" y1="100" x2="76" y2="74" {...line} />
         <rect x="24" y="16" width="52" height="58" {...line} />
       </svg>
-      <PovLegs />
+      <PovLegs wall={wall} />
     </div>
   )
 }

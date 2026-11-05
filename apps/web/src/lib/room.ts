@@ -4,7 +4,8 @@ import type { ArrowDir } from '../components/sprites'
 // The room: you stand in the middle of the Time Room and can face any of its
 // four walls. The front wall holds the files; the other three are empty for
 // now, each with a list of ideas for what could go on it. Ctrl and an arrow
-// faces the wall that way; the view turns like looking round inside a cube.
+// faces the wall that way. The page cuts straight to that wall, like an old
+// screen switching camera feeds; what turns is the room behind it (Backdrop).
 
 export interface Wall {
   id: string
@@ -60,31 +61,14 @@ export const WALLS: Wall[] = [
 export const wallFor = (key: ArrowDir) => WALLS.findIndex((w) => w.key === key)
 
 export interface Facing {
-  /** The wall faced (an index into WALLS). */
+  /** The wall faced (an index into WALLS), clockwise from the files. */
   wall: number
-  /** While turning: the wall being turned away from; otherwise null. */
-  from: number | null
-  turn: 'left' | 'right' | null
-  /** Counts turns, so the same turn twice still starts afresh. */
+  /** Counts turns: whatever reacts to a turn (the cut, focus) watches this. */
   n: number
 }
 
-/** How long a turn takes; matches --turn in theme.css. */
-export const TURN_MS = 420
-
-export const facing = createStore<Facing>({ wall: 0, from: null, turn: null, n: 0 })
+export const facing = createStore<Facing>({ wall: 0, n: 0 })
 
 export function turnTo(wall: number) {
-  facing.set((f) => {
-    if (f.wall === wall) return f
-    // A half turn goes the right way round, like a quarter turn: the wall
-    // behind you comes in from the right.
-    const turn = (wall - f.wall + 4) % 4 === 3 ? 'left' : 'right'
-    return { wall, from: f.wall, turn, n: f.n + 1 }
-  })
-}
-
-/** The turn is over: the wall turned away from is put away. */
-export function settle() {
-  facing.set((f) => (f.from === null ? f : { ...f, from: null, turn: null }))
+  facing.set((f) => (f.wall === wall ? f : { wall, n: f.n + 1 }))
 }

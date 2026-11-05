@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { cubeSheet, type CubeLook } from '../lib/pixelcube'
+import { facing } from '../lib/room'
 import { useSize } from '../lib/size'
+import { useStore } from '../lib/store'
 
 // The void outside the Time Room, as in the show: deep blue, a purple swirl
 // around the middle, purple rocks drifting, sparkles. The cube itself hangs in
 // the middle of it, turning slowly. Everything is pixel art: the sky is
 // painted once per screen size on a coarse grid and scaled up without
 // smoothing.
+//
+// You float in the void looking at the cube, and turning to another wall of
+// the app (Ctrl and an arrow) turns you round out here too: a quarter turn
+// right and the cube's swirl is off to the left, its edge just in view; turn
+// round and there is only a far galaxy, smaller, of its own.
 
 const CELL = 4 // screen pixels per pixel of the sky
 
@@ -52,7 +59,24 @@ function rgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
-function paintSky(ctx: CanvasRenderingContext2D, cols: number, rows: number) {
+/** Which part of the sky is in view: where its swirl is, how big, and whether the cube is in it. */
+interface View {
+  cx: number
+  cy: number
+  scale: number
+  seed: number
+  cube: boolean
+}
+
+// One per wall, clockwise from the files: ahead, right, behind, left.
+const VIEWS: View[] = [
+  { cx: 0, cy: 0, scale: 1, seed: 1, cube: true },
+  { cx: -1.75, cy: 0.05, scale: 1, seed: 1, cube: false },
+  { cx: 0.38, cy: -0.32, scale: 0.42, seed: 11, cube: false },
+  { cx: 1.75, cy: 0.05, scale: 1, seed: 1, cube: false },
+]
+
+function paintSky(ctx: CanvasRenderingContext2D, cols: number, rows: number, view: View): ImageData {
   const img = ctx.createImageData(cols, rows)
   const tones = SKY.map(rgb)
   const put = (x: number, y: number, [r, g, b]: [number, number, number]) => {
@@ -62,15 +86,15 @@ function paintSky(ctx: CanvasRenderingContext2D, cols: number, rows: number) {
   }
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
-      const nx = (x + 0.5 - cols / 2) / (cols / 2)
-      const ny = (y + 0.5 - rows / 2) / (rows / 2)
+      const nx = ((x + 0.5 - cols / 2) / (cols / 2) - view.cx) / view.scale
+      const ny = ((y + 0.5 - rows / 2) / (rows / 2) - view.cy) / view.scale
       const r = Math.hypot(nx / 0.74, ny / 0.9)
       // Twist the noise more the further out it is: the swirl.
       const twist = 1.5 * r
       const tx = nx * Math.cos(twist) - ny * Math.sin(twist)
       const ty = nx * Math.sin(twist) + ny * Math.cos(twist)
-      const n1 = fbm(tx * 2.4 + 10, ty * 2.4 + 10, 1)
-      const n2 = fbm(tx * 5 + 3, ty * 5 + 7, 2)
+      const n1 = fbm(tx * 2.4 + 10, ty * 2.4 + 10, view.seed)
+      const n2 = fbm(tx * 5 + 3, ty * 5 + 7, view.seed + 1)
       const ring = Math.exp(-(((r + (n1 - 0.5) * 0.4 - 1) / 0.21) ** 2)) * (0.5 + 0.65 * n2)
       const glow = Math.exp(-(((r + (n1 - 0.5) * 0.5) / 0.6) ** 2)) * (0.45 + 0.7 * n2)
       const v = Math.min(1, Math.max(ring * 0.85, glow) + 0.18 * n2)
@@ -79,12 +103,12 @@ function paintSky(ctx: CanvasRenderingContext2D, cols: number, rows: number) {
     }
   }
   // Sparkles: dots, little rings and four-pointed stars. None on the cube.
-  const rnd = mulberry32(7)
+  const rnd = mulberry32(7 + view.seed * 31 + Math.round(view.cx * 10))
   const count = Math.round((cols * rows) / 700)
   for (let i = 0; i < count; i++) {
     const x = Math.floor(rnd() * cols)
     const y = Math.floor(rnd() * rows)
-    if (Math.hypot((x - cols / 2) / cols, (y - rows / 2) / rows) < 0.12) continue
+    if (view.cube && Math.hypot((x - cols / 2) / cols, (y - rows / 2) / rows) < 0.12) continue
     const kind = rnd()
     if (kind < 0.55) put(x, y, rgb(STAR.dot))
     else if (kind < 0.8) {
@@ -95,8 +119,12 @@ function paintSky(ctx: CanvasRenderingContext2D, cols: number, rows: number) {
       put(x, y, rgb(STAR.core))
     }
   }
-  ctx.putImageData(img, 0, 0)
+  return img
 }
+
+// Painting a sky takes a moment; each one is painted once and kept, so a
+// turn shows the next at once.
+const skies = new Map<string, ImageData>()
 
 // --- Rocks ----------------------------------------------------------------
 
@@ -171,19 +199,38 @@ const TIME_ROOM: CubeLook = {
 }
 const FRAMES = 24
 
+// The rocks around you: ahead they are where ROCKS says; every other way
+// they are the same lot shuffled round, with other shapes.
+function rocksFor(wall: number) {
+  if (wall === 0) return ROCKS
+  return ROCKS.map((r, i) => ({
+    ...r,
+    x: (r.x + wall * 0.37) % 1,
+    y: (r.y + wall * 0.23 + (i % 3) * 0.05) % 1,
+    seed: r.seed + wall * 101,
+    far: (i + wall) % 3 === 0,
+  }))
+}
+
 export function Multiverse() {
   const box = useRef<HTMLDivElement>(null)
   const sky = useRef<HTMLCanvasElement>(null)
   const [width, height] = useSize(box)
+  const { wall } = useStore(facing)
+  const view = VIEWS[wall]
   const cols = Math.ceil(width / CELL)
   const rows = Math.ceil(height / CELL)
 
   useEffect(() => {
     const ctx = sky.current?.getContext('2d')
-    if (ctx && cols > 0 && rows > 0) paintSky(ctx, cols, rows)
-  }, [cols, rows])
+    if (!ctx || cols <= 0 || rows <= 0) return
+    const key = `${wall}:${cols}x${rows}`
+    let img = skies.get(key)
+    if (!img) skies.set(key, (img = paintSky(ctx, cols, rows, VIEWS[wall])))
+    ctx.putImageData(img, 0, 0)
+  }, [cols, rows, wall])
 
-  const rocks = useMemo(() => ROCKS.map((r) => ({ ...r, url: rockSprite(r.seed, r.w, r.h, r.far ? ROCK.far : ROCK.near) })), [])
+  const rocks = useMemo(() => rocksFor(wall).map((r) => ({ ...r, url: rockSprite(r.seed, r.w, r.h, r.far ? ROCK.far : ROCK.near) })), [wall])
 
   // The cube is about a quarter of the short side of the screen.
   const grid = Math.max(40, Math.min(84, Math.round((Math.min(width, height) * 0.25) / 3)))
@@ -211,7 +258,7 @@ export function Multiverse() {
           }
         />
       ))}
-      <div className="mv-cube">
+      <div className="mv-cube" hidden={!view.cube}>
         <span
           className="sprite"
           style={

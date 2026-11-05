@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
-import { facing, settle, TURN_MS, turnTo, wallFor, WALLS, type Wall } from '../lib/room'
+import { facing, turnTo, wallFor, WALLS, type Wall } from '../lib/room'
 import { focusEl, navScope, startOf, typing, usingKeyboard } from '../lib/spatial'
 import { useStore } from '../lib/store'
 import { KeyCap } from './KeyCap'
@@ -53,28 +53,20 @@ export function Room({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('focusin', onFocus)
   }, [])
 
-  // The turn plays out, then the wall behind is put away.
-  useEffect(() => {
-    if (f.from === null) return
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const t = window.setTimeout(settle, reduced ? 0 : TURN_MS)
-    return () => window.clearTimeout(t)
-  }, [f.from, f.n])
-
   // Someone on the keyboard turned: carry focus onto the wall now faced.
   useEffect(() => {
-    if (f.from !== null || f.n === 0 || !usingKeyboard()) return
+    if (f.n === 0 || !usingKeyboard()) return
     const wall = walls.current[f.wall]
     if (!wall || wall.contains(document.activeElement)) return
     const before = lastFocus.current[f.wall]
     const to = before?.isConnected && wall.contains(before) ? before : startOf(wall)
     if (to) focusEl(to)
-  }, [f.from, f.n, f.wall])
+  }, [f.n, f.wall])
 
   return (
-    <div className="room min-h-0 flex-1" data-turn={f.turn ?? undefined}>
+    <div className="room min-h-0 flex-1">
       {WALLS.map((w, i) => {
-        const state = i === f.wall ? (f.from === null ? 'faced' : 'coming') : i === f.from ? 'going' : 'away'
+        const state = i === f.wall ? 'faced' : 'away'
         return (
           <div
             key={w.id}

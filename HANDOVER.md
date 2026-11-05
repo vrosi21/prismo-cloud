@@ -66,6 +66,16 @@ by keyboard; one wall is the files, the others placeholders with ideas):
         stepped 3D turn, a D-pad in the header, Backspace turns back to the
         files, focus follows the turn, key guide and hints updated.
 
+Correction (step 10 read the request wrong): what turns is the backdrop,
+not the page. The Time Room turns round you and so does the Multiverse sky,
+with the cube in view in one direction only; BMO has no backdrop and does
+not change. The page itself cuts straight to the other wall, like an old
+screen switching camera feeds: no swing, at most a moment of static.
+
+11. [x] Turning rebuilt that way: instant cut of the page with a short
+        feed-switch glitch, Time Room and Multiverse backdrops drawn for the
+        wall faced.
+
 ## Log
 
 - Start of the overhaul. Plan written.
@@ -143,6 +153,27 @@ by keyboard; one wall is the files, the others placeholders with ideas):
   keyboard focus lands on "files". To fill a wall, replace `EmptyWall` for
   that wall in `Room`. Key guide (Settings) and status bar hint updated;
   `KeyCap` moved to `components/KeyCap.tsx`.
+
+- Step 11 done. `lib/room.ts`: `facing` is just `{ wall, n }`; `turnTo` is
+  instant (no `settle`, no `TURN_MS`); `Room.tsx` has only faced and away
+  walls, and the 3D swing is gone from `theme.css`.
+  `components/FeedCut.tsx` (mounted in `App.tsx`) is the cut: three frames
+  of 55 ms on a 4 px grid (full snow, torn bands with a white line, a dark
+  bar rolling through) while `[data-cut="on"]` jolts `#root` sideways and
+  drains its colour (`feed-jolt`); nothing at all with reduced motion.
+  Time Room (`Backdrop.tsx`): `spot()` maps a point of the screen to a
+  point in the room (2x2x2, x east, z north = the files' wall) for the wall
+  faced; `paint()` uses it, so the same room works every way round. The
+  legs run along the floor and up the files' wall: ahead when facing the
+  files, on the left wall facing time, on the right facing lookout, out of
+  sight facing wishes. The lookout (west) wall is one big window onto the
+  void (`DOOR`), seen on a side wall facing files or wishes; facing it, the
+  page covers most of it. Multiverse (`Multiverse.tsx`): `VIEWS` gives each
+  wall its part of the sky (the cube's swirl ahead, at the left or right
+  edge after a quarter turn, a far galaxy behind), `rocksFor` shuffles the
+  rocks, the cube shows facing the files only; skies are painted once per
+  wall and size and kept (`skies`), so a turn is instant. Checked all four
+  ways in Time Room, Multiverse and BMO with the mock.
 
 ## Ideas for next time
 
