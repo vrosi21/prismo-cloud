@@ -90,6 +90,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/collections", s.listCollections)
 			r.Get("/shared", s.sharedWithMe)
 			r.Get("/shared/folders/{id}/assets", s.sharedFolderAssets)
+			r.With(s.memberOnly).Get("/tasks", s.listTasks)
 		})
 
 		// Changing and deleting.
@@ -106,6 +107,9 @@ func (s *Server) Router() http.Handler {
 				r.Post("/collections", s.createCollection)
 				r.Patch("/collections/{id}", s.updateCollection)
 				r.Delete("/collections/{id}", s.deleteCollection)
+				r.Post("/tasks", s.createTask)
+				r.Patch("/tasks/{id}", s.updateTask)
+				r.Delete("/tasks/{id}", s.deleteTask)
 			})
 		})
 

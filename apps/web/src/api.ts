@@ -52,6 +52,19 @@ export interface Token {
   last_used_at: string | null
 }
 
+/** A thing to do. date is 2026-11-12 and time 09:30, in the owner's own local time. */
+export interface Task {
+  id: string
+  title: string
+  date: string | null
+  time: string | null
+  done: boolean
+  done_at: string | null
+  created_at: string
+}
+
+export type TaskChange = { title?: string; date?: string | null; time?: string | null; done?: boolean }
+
 export interface Me {
   user: { id: string; email: string }
   /** false for a guest: someone who only reaches what was shared with them. */
@@ -240,4 +253,10 @@ export const api = {
     request<{ token: Token; secret: string }>('POST', '/v1/tokens', { name, scope, default_visibility }),
   updateToken: (id: string, change: { name?: string; default_visibility?: Visibility }) => request<Token>('PATCH', `/v1/tokens/${id}`, change),
   deleteToken: (id: string) => request<void>('DELETE', `/v1/tokens/${id}`),
+
+  /** Tasks dated from..to (both included), and the ones with no date. */
+  tasks: (from: string, to: string) => request<{ tasks: Task[] }>('GET', '/v1/tasks' + query({ from, to })).then((r) => r.tasks),
+  createTask: (title: string, date: string | null, time: string | null) => request<Task>('POST', '/v1/tasks', { title, date, time }),
+  updateTask: (id: string, change: TaskChange) => request<Task>('PATCH', `/v1/tasks/${id}`, change),
+  deleteTask: (id: string) => request<void>('DELETE', `/v1/tasks/${id}`),
 }

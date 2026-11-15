@@ -70,7 +70,7 @@ const KEY_GUIDE: { title?: string; rows: [Cap[], string][] }[] = [
   {
     title: 'turning round the room',
     rows: [
-      ...WALLS.map((w): [Cap[], string] => [['ctrl', w.key], w.id === 'files' ? 'face the files' : `face the ${w.name} wall (empty for now)`]),
+      ...WALLS.map((w): [Cap[], string] => [['ctrl', w.key], w.id === 'files' ? 'face the files' : w.id === 'time' ? 'face tasks and the calendar' : `face the ${w.name} wall (empty for now)`]),
       [['backspace'], 'on another wall: back to the files'],
     ],
   },

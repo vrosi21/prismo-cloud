@@ -22,6 +22,25 @@ const collections = ['screenshots', 'gifs', 'stickers'].map((name) => ({ id: uui
 collections.push({ id: uuid(), name: '2026', parent_id: collections[0].id, created_at: new Date().toISOString() })
 const tokens = []
 const shares = []
+
+// A few tasks around today, so the time wall has something on it.
+function makeTask(title, date = null, time = null, done = false) {
+  return { id: uuid(), title, date, time, done, done_at: done ? new Date().toISOString() : null, created_at: new Date().toISOString() }
+}
+const dayFromToday = (n) => {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const tasks = [
+  makeTask('back up the server', dayFromToday(0), '20:00'),
+  makeTask('sort the screenshots from october', dayFromToday(0)),
+  makeTask('reply to the invite', dayFromToday(-1), null, true),
+  makeTask('dentist', dayFromToday(3), '09:30'),
+  makeTask('make stickers from the trip photos', dayFromToday(9)),
+  makeTask('try the time wall on the phone'),
+  makeTask('pick a new hotkey for the picker'),
+]
 const folderId = (name) => collections.find((c) => c.name === name).id
 // Which picture each file shows (see pictures.mjs), by asset id.
 const looks = new Map()
@@ -242,6 +261,41 @@ const routes = [
   }],
   ['DELETE', /^\/v1\/tokens\/([^/]+)$/, (req, m) => {
     tokens.splice(tokens.findIndex((t) => t.id === m[1]), 1)
+    return [204]
+  }],
+  ['GET', /^\/v1\/tasks$/, (req, m, q) => {
+    const from = q.get('from')
+    const to = q.get('to')
+    const fresh = Date.now() - 14 * 86_400_000
+    const shown = tasks.filter((t) => (t.date ? t.date >= from && t.date <= to : !t.done_at || Date.parse(t.done_at) > fresh))
+    const order = (t) => `${t.date ?? '9999'} ${t.time ?? '00:00'} ${t.created_at}`
+    return [200, { tasks: shown.sort((a, b) => order(a).localeCompare(order(b))) }]
+  }],
+  ['POST', /^\/v1\/tasks$/, async (req) => {
+    const { title, date = null, time = null } = await body(req)
+    if (time && !date) return [400, { error: 'a task with a time needs a date too' }]
+    const task = makeTask(title.trim(), date, time)
+    tasks.push(task)
+    return [201, task]
+  }],
+  ['PATCH', /^\/v1\/tasks\/([^/]+)$/, async (req, m) => {
+    const task = tasks.find((t) => t.id === m[1])
+    if (!task) return [404, { error: 'not found' }]
+    const change = await body(req)
+    if ('title' in change) task.title = change.title.trim()
+    if ('date' in change) task.date = change.date
+    if ('time' in change) task.time = change.time
+    if (!task.date) task.time = null
+    if ('done' in change) {
+      task.done = change.done
+      task.done_at = change.done ? (task.done_at ?? new Date().toISOString()) : null
+    }
+    return [200, task]
+  }],
+  ['DELETE', /^\/v1\/tasks\/([^/]+)$/, (req, m) => {
+    const i = tasks.findIndex((t) => t.id === m[1])
+    if (i < 0) return [404, { error: 'not found' }]
+    tasks.splice(i, 1)
     return [204]
   }],
 ]

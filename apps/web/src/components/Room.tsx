@@ -5,12 +5,14 @@ import { focusEl, navScope, startOf, typing, usingKeyboard } from '../lib/spatia
 import { useStore } from '../lib/store'
 import { KeyCap } from './KeyCap'
 import { Arrow } from './sprites'
+import { TimeWall } from './TimeWall'
 
 const KEYS: Record<string, (typeof WALLS)[number]['key']> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }
 
 /**
  * The four walls of the room, all in one place, one faced at a time. The
- * files (the children) are on the front wall. Walls not faced stay mounted
+ * files (the children) are on the front wall, tasks and the calendar
+ * (TimeWall) on the right one. Walls not faced stay mounted
  * but hidden and inert, so turning back finds the files as they were left:
  * same folder, same scroll, same tile focused.
  */
@@ -78,7 +80,7 @@ export function Room({ children }: { children: ReactNode }) {
             inert={state !== 'faced'}
             aria-hidden={state === 'away' || undefined}
           >
-            {i === 0 ? children : <EmptyWall wall={w} />}
+            {i === 0 ? children : w.id === 'time' ? <TimeWall /> : <EmptyWall wall={w} />}
           </div>
         )
       })}
@@ -86,11 +88,15 @@ export function Room({ children }: { children: ReactNode }) {
   )
 }
 
-/** A wall with nothing on it yet: what it is for, and ideas for what could go there. */
+/**
+ * A wall with nothing on it yet: what it is for, and ideas for what could go
+ * there. A sign in the corner, not a page over the middle, so the room shows:
+ * Prismo's face is on the wishes wall.
+ */
 function EmptyWall({ wall }: { wall: Wall }) {
   return (
     <section className="flex h-full w-full overflow-y-auto" aria-label={`${wall.name} wall`}>
-      <div className="panel px-raised m-auto flex w-full max-w-[660px] flex-col gap-5 p-6">
+      <div className="panel px-raised mt-auto flex w-full max-w-[440px] flex-col gap-4 p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1>{wall.name.toUpperCase()}</h1>
           <span className="flex items-center" title={`ctrl and ${wall.key} faces this wall`}>

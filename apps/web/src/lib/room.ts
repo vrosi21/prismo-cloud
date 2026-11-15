@@ -2,8 +2,9 @@ import { createStore } from './store'
 import type { ArrowDir } from '../components/sprites'
 
 // The room: you stand in the middle of the Time Room and can face any of its
-// four walls. The front wall holds the files; the other three are empty for
-// now, each with a list of ideas for what could go on it. Ctrl and an arrow
+// four walls. The front wall holds the files, the right one tasks and the
+// calendar; the other two are empty for now, each with a list of ideas for
+// what could go on it. Ctrl and an arrow
 // faces the wall that way. The page cuts straight to that wall, like an old
 // screen switching camera feeds; what turns is the room behind it (Backdrop).
 
@@ -13,25 +14,14 @@ export interface Wall {
   /** The arrow that faces it (with Ctrl). */
   key: ArrowDir
   blurb: string
-  /** What could go on this wall; empty for the files. */
+  /** What could go on this wall; empty for a wall that has its own page. */
   ideas: string[]
 }
 
 // Clockwise from the front, so the next one along is a quarter turn right.
 export const WALLS: Wall[] = [
   { id: 'files', name: 'files', key: 'up', blurb: 'the library: folders, pictures, everything you saved.', ideas: [] },
-  {
-    id: 'time',
-    name: 'time',
-    key: 'right',
-    blurb: 'everything you saved, laid out by when.',
-    ideas: [
-      'a calendar with one square per day, brighter the more you saved that day',
-      'on this day: what you captured a year ago, and two years ago',
-      'a film strip to scroll back through, month by month',
-      'jump to a date, or right back to the first thing you ever uploaded',
-    ],
-  },
+  { id: 'time', name: 'time', key: 'right', blurb: 'tasks and the calendar.', ideas: [] },
   {
     id: 'wishes',
     name: 'wishes',

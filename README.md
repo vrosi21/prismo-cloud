@@ -88,6 +88,17 @@ across all folders.
 - A capture program can name a folder by path (`screenshots/2026`); missing folders are made.
 - Search looks in titles, file names and tags.
 
+## The room
+
+The app is a room with four walls; `Ctrl` and an arrow faces one, `Backspace` turns
+back to the files. Up is the files, right is time (tasks and the calendar), down and
+left are empty for now. Settings lists every key.
+
+**Time**: a month on one side, the picked day's tasks on the other, and "someday" for
+tasks without a date. A task can have a day and a time; take the day away and it goes
+back to someday. Tasks are kept on the server, one list per member, so every device
+sees the same.
+
 ## Stickers
 
 Open a picture and press **make sticker**. The original is never changed; the result is

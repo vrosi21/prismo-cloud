@@ -175,6 +175,29 @@ screen switching camera feeds: no swing, at most a moment of static.
   wall and size and kept (`skies`), so a turn is instant. Checked all four
   ways in Time Room, Multiverse and BMO with the mock.
 
+- Step 12 (2026-11-12, asked for by the user: "my own tasks and calendar",
+  "when i turn around i should see his face, and on side view you only see
+  his legs cut off at wall", "an idle animation in the background").
+  The time wall (Ctrl + right) is `components/TimeWall.tsx`: a month grid
+  (Monday first, six weeks, a pip per task) beside the picked day's tasks,
+  and "someday" for tasks without a date. One kind of thing: a task, with
+  an optional day and an optional time (a time needs a day). Stored on the
+  server: migration `0006_tasks.sql`, `store/tasks.go`, `api/tasks.go`
+  (`GET /v1/tasks?from&to` gives that range plus the undated ones, undated
+  done ones drop out after 14 days; `POST`, `PATCH` with `date: null` /
+  `time: null` to clear, `DELETE`); members only, an upload token cannot
+  read them. Mock server has the same, seeded around today.
+  Prismo (`Backdrop.tsx`) is no longer seen through his own eyes: he lies
+  painted on the strip of room from the wishes wall to the files wall,
+  unrolled as one sheet (`unroll`): head and face up the wishes wall,
+  body and arms on the floor, legs up the files wall. His shapes come from
+  the sprite in `sprites.tsx`. Idle, each on its own clock in `theme.css`:
+  chest rises (`prismo-breathe`), pupil looks about inside the eye
+  (`prismo-look`, clipped), blink (`prismo-blink`), foot tap
+  (`prismo-tap`); all off with reduced motion. An empty wall's sign now
+  sits in the bottom-left corner instead of over the middle, so his face
+  shows facing wishes.
+
 ## Ideas for next time
 
 - (The three earlier ideas are steps 7 to 9 above.)

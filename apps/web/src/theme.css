@@ -475,6 +475,39 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 .wall-turn:hover:not(:disabled) { background: var(--panel-2); }
 .wall-turn:disabled { cursor: default; color: var(--ink-dim); }
 
+/* The time wall: a month of day buttons, each with a pip per task. */
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-head { padding-bottom: 2px; text-align: center; font-family: var(--font-pixel); font-size: 8px; text-transform: uppercase; color: var(--ink-dim); }
+.cal-day {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 4px 6px;
+  background: var(--bg-deep);
+  color: var(--ink);
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  cursor: pointer;
+  box-shadow: inset 0 var(--px) 0 0 var(--shadow);
+}
+.cal-day:hover { background: var(--panel-2); }
+.cal-day[data-other] { color: var(--ink-dim); opacity: 0.6; }
+.cal-day[data-today] { box-shadow: inset 0 0 0 calc(var(--px) * 1) var(--accent-deep); }
+.cal-day[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); opacity: 1; }
+.cal-pips { display: flex; gap: 3px; }
+.cal-pips i { width: calc(var(--px) * 2); height: calc(var(--px) * 2); background: var(--accent-deep); }
+.cal-pips i[data-done] { background: var(--ink-dim); opacity: 0.6; }
+.cal-day[aria-pressed="true"] .cal-pips i { background: var(--on-accent); }
+
+.task { display: flex; align-items: center; gap: 10px; padding: 3px 2px; }
+.task:hover { background: var(--panel-2); }
+.task-title { flex: 1; min-width: 0; text-align: left; line-height: 1.15; overflow-wrap: anywhere; cursor: pointer; color: var(--ink); }
+.task[data-done] .task-title { color: var(--ink-dim); text-decoration: line-through; }
+.task-time { font-family: var(--font-pixel); font-size: 8px; color: var(--accent-deep); }
+.task-edit { display: flex; flex-direction: column; gap: 8px; padding: 8px; background: var(--bg-deep); }
+
 /* The compass in the header: four arrows in a cross, the wall faced lit. */
 .compass { display: grid; grid-template: repeat(3, 13px) / repeat(3, 13px); }
 .compass button {
@@ -689,14 +722,33 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 
 /* Time Room: Prismo's own legs, flat on the floor and folding up the wall.
    Drawn in screen pixels, so the box is the screen. */
-.pov-legs {
+.prismo-art {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
-.pov-tap { animation: pov-tap 7s steps(1) infinite; }
-@keyframes pov-tap {
+/* Prismo idling, each on its own clock so they rarely line up: the chest
+   rises a pixel, the pupil looks to one side and the other, the eye blinks,
+   one foot taps. All in whole steps, like the rest of the sprites. */
+.prismo-breathe { animation: prismo-breathe 4.6s steps(1) infinite; }
+@keyframes prismo-breathe {
+  0%, 44% { visibility: hidden; }
+  45%, 100% { visibility: visible; }
+}
+.prismo-look { animation: prismo-look 9.5s steps(1) infinite; }
+@keyframes prismo-look {
+  0%, 38%, 72%, 100% { transform: none; }
+  40%, 56% { transform: translateX(calc(var(--cell) * 2)); }
+  58%, 70% { transform: translateX(calc(var(--cell) * -2)); }
+}
+.prismo-blink { visibility: hidden; animation: prismo-blink 5.3s steps(1) infinite; }
+@keyframes prismo-blink {
+  0%, 95% { visibility: hidden; }
+  96%, 98% { visibility: visible; }
+}
+.prismo-tap { animation: prismo-tap 7s steps(1) infinite; }
+@keyframes prismo-tap {
   0%, 89%, 95% { transform: none; }
   86%, 92% { transform: translateY(calc(var(--cell) * -1)); }
 }
@@ -723,7 +775,7 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 
 @media (prefers-reduced-motion: reduce) {
   [data-cut="on"] #root { animation: none; }
-  .mv-rock, .mv-cube, .mv-cube > span, .face-eye, .pop, .pov-tap { animation: none; }
+  .mv-rock, .mv-cube, .mv-cube > span, .face-eye, .pop, .prismo-tap, .prismo-breathe, .prismo-look, .prismo-blink { animation: none; }
   .pcube:not(.pcube-still) { animation: cube-pulse 1.2s steps(2, jump-none) infinite; background-position-x: 0; }
   @keyframes cube-pulse { to { opacity: 0.45; } }
 }
