@@ -52,18 +52,130 @@ export interface Token {
   last_used_at: string | null
 }
 
-/** A thing to do. date is 2026-11-12 and time 09:30, in the owner's own local time. */
-export interface Task {
+export type ItemKind = 'task' | 'event' | 'notebook' | 'board'
+export type ItemStatus = 'todo' | 'doing' | 'waiting' | 'done'
+export type Repeat = 'daily' | 'weekly' | 'monthly' | 'yearly'
+
+/**
+ * Anything written or planned: a task, an event, a notebook, a board. One
+ * shape for all of them; the kind says what an item mainly is, the other
+ * parts say where else it shows (a day puts it on the calendar, a status
+ * makes it a task, a board's card points at it). Days and times are the
+ * owner's own wall clock: date 2026-11-12, time 09:30.
+ */
+export interface Item {
   id: string
+  kind: ItemKind
   title: string
+  /** The start of the body, for cards and lists. */
+  excerpt: string
+  /** Markdown; only when one item is read. */
+  body?: string
+  /** JSON Canvas; boards only, only when one item is read. */
+  canvas?: Canvas
+  collection_id: string | null
+  status: ItemStatus | null
+  done_at: string | null
   date: string | null
   time: string | null
-  done: boolean
-  done_at: string | null
+  /** Last day of an item that spans several. */
+  end_date: string | null
+  /** Length of a timed item. */
+  minutes: number | null
+  repeat: Repeat | null
+  /** 1..6, the JSON Canvas colours, painted by the theme. */
+  color: number | null
+  /** Counts changes to the body or canvas. */
+  version: number
   created_at: string
+  updated_at: string
+  deleted_at: string | null
+  /** Only when one item is read: what it links to ("to") and what links to it ("from"). */
+  links?: ItemRef[]
 }
 
-export type TaskChange = { title?: string; date?: string | null; time?: string | null; done?: boolean }
+export interface ItemRef {
+  id: string
+  kind: ItemKind
+  title: string
+  status: ItemStatus | null
+  dir: 'to' | 'from'
+}
+
+/** A change to an item: a field left out stays; null clears it. */
+export type ItemChange = Partial<{
+  kind: ItemKind
+  title: string
+  body: string
+  canvas: Canvas
+  collection_id: string | null
+  status: ItemStatus
+  date: string | null
+  time: string | null
+  end_date: string | null
+  minutes: number | null
+  repeat: Repeat | null
+  color: number | null
+  trashed: boolean
+  /** The version read; a body or canvas change is refused if it moved on. */
+  version: number
+}>
+
+export interface ItemQuery {
+  /** The calendar: what touches these days (both included). */
+  from?: string
+  to?: string
+  /** With from/to: the tasks with no day too. */
+  someday?: boolean
+  kind?: string
+  collection?: string
+  q?: string
+  ids?: string[]
+  trashed?: boolean
+}
+
+// JSON Canvas 1.0 (jsoncanvas.org), the format boards are stored in. A card
+// for one of the owner's items is a file node pointing at "item/<id>", a
+// picture from the library one pointing at "asset/<id>".
+export type CanvasColor = string // "1".."6" or "#rrggbb"
+export type Side = 'top' | 'right' | 'bottom' | 'left'
+interface NodeBase {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  color?: CanvasColor
+}
+export type CanvasNode =
+  | (NodeBase & { type: 'text'; text: string })
+  | (NodeBase & { type: 'file'; file: string; subpath?: string })
+  | (NodeBase & { type: 'link'; url: string })
+  | (NodeBase & { type: 'group'; label?: string; background?: string })
+export interface CanvasEdge {
+  id: string
+  fromNode: string
+  fromSide?: Side
+  fromEnd?: 'none' | 'arrow'
+  toNode: string
+  toSide?: Side
+  toEnd?: 'none' | 'arrow'
+  color?: CanvasColor
+  label?: string
+}
+export interface Canvas {
+  nodes: CanvasNode[]
+  edges: CanvasEdge[]
+}
+
+/** A save refused because the text changed elsewhere: what is there now. */
+export class ConflictError extends Error {
+  item: Item
+  constructor(message: string, item: Item) {
+    super(message)
+    this.item = item
+  }
+}
 
 export interface Me {
   user: { id: string; email: string }
@@ -201,6 +313,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const data: unknown = await res.json().catch(() => null)
   if (!res.ok) {
     const message = (data as { error?: string } | null)?.error ?? `request failed (${res.status})`
+    const current = (data as { item?: Item } | null)?.item
+    if (res.status === 409 && current) throw new ConflictError(message, current)
     throw new ApiError(res.status, message)
   }
   return data as T
@@ -280,9 +394,27 @@ export const api = {
   updateToken: (id: string, change: { name?: string; default_visibility?: Visibility }) => request<Token>('PATCH', `/v1/tokens/${id}`, change),
   deleteToken: (id: string) => request<void>('DELETE', `/v1/tokens/${id}`),
 
-  /** Tasks dated from..to (both included), and the ones with no date. */
-  tasks: (from: string, to: string) => request<{ tasks: Task[] }>('GET', '/v1/tasks' + query({ from, to })).then((r) => r.tasks),
-  createTask: (title: string, date: string | null, time: string | null) => request<Task>('POST', '/v1/tasks', { title, date, time }),
-  updateTask: (id: string, change: TaskChange) => request<Task>('PATCH', `/v1/tasks/${id}`, change),
-  deleteTask: (id: string) => request<void>('DELETE', `/v1/tasks/${id}`),
+  items: (q: ItemQuery) =>
+    request<{ items: Item[] }>(
+      'GET',
+      '/v1/items' +
+        query({
+          from: q.from,
+          to: q.to,
+          someday: q.someday ? '1' : undefined,
+          kind: q.kind,
+          collection: q.collection,
+          q: q.q,
+          ids: q.ids?.join(','),
+          trashed: q.trashed ? '1' : undefined,
+        }),
+    ).then((r) => r.items),
+  item: (id: string) => request<Item>('GET', `/v1/items/${id}`),
+  /** linkFrom: also link the new item from that one (a notebook for a task). */
+  createItem: (item: ItemChange & { kind: ItemKind }, linkFrom?: string) => request<Item>('POST', '/v1/items', { ...item, link_from: linkFrom }),
+  updateItem: (id: string, change: ItemChange) => request<Item>('PATCH', `/v1/items/${id}`, change),
+  trashItem: (id: string) => request<void>('DELETE', `/v1/items/${id}`),
+  purgeItem: (id: string) => request<void>('DELETE', `/v1/items/${id}?permanent=1`),
+  linkItems: (from: string, to: string) => request<void>('POST', `/v1/items/${from}/links`, { to }),
+  unlinkItems: (a: string, b: string) => request<void>('DELETE', `/v1/items/${a}/links/${b}`),
 }

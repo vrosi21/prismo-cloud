@@ -3,8 +3,8 @@ import type { ArrowDir } from '../components/sprites'
 
 // The room: you stand in the middle of the Time Room and can face any of its
 // four walls. The front wall holds the files, the right one tasks and the
-// calendar; the other two are empty for now, each with a list of ideas for
-// what could go on it. Ctrl and an arrow
+// calendar, the left one notebooks and boards; the back one (wishes, where
+// Prismo's face is) is empty for now, with a list of ideas for it. Ctrl and an arrow
 // faces the wall that way. The page cuts straight to that wall, like an old
 // screen switching camera feeds; what turns is the room behind it (Backdrop).
 
@@ -32,20 +32,10 @@ export const WALLS: Wall[] = [
       'a board to arrange stickers and pictures on, like a fridge door',
       'notes and bits of text kept next to the files',
       'an inbox of new uploads still waiting to be sorted into folders',
+      'mail: letters fly out of the window on the right when sent (planned)',
     ],
   },
-  {
-    id: 'lookout',
-    name: 'lookout',
-    key: 'left',
-    blurb: 'what is going on in the library.',
-    ideas: [
-      'a live feed of uploads from sharex, the folder watcher and the web',
-      'storage by type and folder, and the biggest files to clear out',
-      'shared links: who opened what, and when the links run out',
-      'files still processing or failed, with a button to try again',
-    ],
-  },
+  { id: 'lookout', name: 'lookout', key: 'left', blurb: 'notebooks and boards.', ideas: [] },
 ]
 
 export const wallFor = (key: ArrowDir) => WALLS.findIndex((w) => w.key === key)

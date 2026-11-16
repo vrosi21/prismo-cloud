@@ -91,13 +91,39 @@ across all folders.
 ## The room
 
 The app is a room with four walls; `Ctrl` and an arrow faces one, `Backspace` turns
-back to the files. Up is the files, right is time (tasks and the calendar), down and
-left are empty for now. Settings lists every key.
+back to the files. Up is the files, right is time (calendar and tasks), left is the
+lookout (notebooks and boards), down is wishes (Prismo's face; empty for now).
+Settings lists every key.
 
-**Time**: a month on one side, the picked day's tasks on the other, and "someday" for
-tasks without a date. A task can have a day and a time; take the day away and it goes
-back to someday. Tasks are kept on the server, one list per member, so every device
-sees the same.
+**Files**: folders and files. "filters" narrows what is shown by type, size, the day it
+was added and who can open it, and orders it (newest, oldest, biggest, smallest, by
+name). Inside a folder the filters narrow that folder; at the top they look through
+every folder. It all lives in the URL, so a filtered view can be bookmarked.
+
+**Time**: a calendar like Google's. Views: day, 3 days, week, month, and months (2 or 3
+side by side, or 4 in a square); keys `d` `x` `w` `m` `g`, `t` for today, `j`/`k` to
+step, `c` for new. Drag on the hours to make an event, drag one to move it, drag its
+bottom edge to make it longer; in a month, drag a day to another day. Beside it the
+tasks: what is late, what has no day, what was done lately. A repeating task ticked off
+moves to its next day.
+
+**Lookout**: notebooks and boards. A notebook types like a normal editor and is
+Markdown underneath (the "md" button shows it): `# ` is a heading, `- [ ] ` a checkbox,
+`$$x^2$$` turns into a formula (saved as `$x^2$`; a block is `$$ ... $$`), `/` at the
+start of a line lists the blocks. A board is an endless canvas: notes, text, frames,
+cards for tasks and notebooks, arrows between them (drag a dot on a card's side).
+Hovering a card lights up everything that leads to it. Boards are saved as
+[JSON Canvas](https://jsoncanvas.org) and can be downloaded as a `.canvas` file, or a
+`.canvas` file added to a board.
+
+**One kind of thing underneath.** Tasks, events, notebooks and boards are all *items*
+with the same parts: a title, a text, a folder, a colour, links to other items, and
+optionally a day (then it is on the calendar), a status (then it is a task) or a canvas
+(a board). A card on a board points at an item, so ticking it off on the board ticks it
+off on the calendar too; any item can have a notebook linked to it ("+ notebook for
+it"). Notebooks and boards sit in folders like files and show in the library above the
+files. Text and canvases are saved as you go; if the same one was saved from another
+tab meanwhile, nothing is overwritten and you choose which to keep.
 
 ## Stickers
 
@@ -129,6 +155,13 @@ Two different things, on purpose:
 
 A link can be forwarded, so a link never allows changing anything. Whoever is to edit
 has to sign in.
+
+A file link (`/i/<name>.png`) works two ways. Opened in a browser tab, it shows the
+Prismo page around the file: the picture or a player, a download button and a direct
+link. Pasted into a chat app, or used in an `<img>` or `<video>`, it is the file itself,
+so previews keep working. The **direct link** (same link with `?raw=1`, "copy direct
+link" in the viewer) is the bare file even in a tab. A video that not every browser can
+play (HEVC from a phone, 10-bit) also gets an H.264 copy, which the page plays.
 
 Sharing a folder shares everything in it, subfolders included. Sharing with a person makes
 them a **guest**: they can sign in with that Google account

@@ -5,6 +5,7 @@ import { focusEl, navScope, startOf, typing, usingKeyboard } from '../lib/spatia
 import { useStore } from '../lib/store'
 import { KeyCap } from './KeyCap'
 import { Arrow } from './sprites'
+import { LookoutWall } from './LookoutWall'
 import { TimeWall } from './TimeWall'
 
 const KEYS: Record<string, (typeof WALLS)[number]['key']> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }
@@ -12,7 +13,8 @@ const KEYS: Record<string, (typeof WALLS)[number]['key']> = { ArrowUp: 'up', Arr
 /**
  * The four walls of the room, all in one place, one faced at a time. The
  * files (the children) are on the front wall, tasks and the calendar
- * (TimeWall) on the right one. Walls not faced stay mounted
+ * (TimeWall) on the right one, notebooks and boards (LookoutWall) on the
+ * left one. Walls not faced stay mounted
  * but hidden and inert, so turning back finds the files as they were left:
  * same folder, same scroll, same tile focused.
  */
@@ -80,7 +82,7 @@ export function Room({ children }: { children: ReactNode }) {
             inert={state !== 'faced'}
             aria-hidden={state === 'away' || undefined}
           >
-            {i === 0 ? children : w.id === 'time' ? <TimeWall /> : <EmptyWall wall={w} />}
+            {i === 0 ? children : w.id === 'time' ? <TimeWall /> : w.id === 'lookout' ? <LookoutWall /> : <EmptyWall wall={w} />}
           </div>
         )
       })}

@@ -198,6 +198,47 @@ screen switching camera feeds: no swing, at most a moment of static.
   sits in the bottom-left corner instead of over the middle, so his face
   shows facing wishes.
 
+- Step 13 (2026-11-16, asked for by the user). Five things:
+  1. "i shared a video and on pc its just the video, not playable": the
+     viewer's "copy link" handed out the raw `/i/` link. Now `publicFile`
+     answers a browser tab (`Sec-Fetch-Dest: document`) with the share page
+     and everything else with the bytes (`Vary: Sec-Fetch-Dest`); `?raw=1` is
+     the direct link ("copy direct link", ShareX `direct_url`). Raw media
+     lost the CSP `sandbox` (some browsers will not play a video in a
+     sandboxed tab; downloads keep it). The worker probes codec and pixel
+     format and makes the H.264 copy for anything not web-safe; migration
+     0007 queues existing MP4/WebM videos without one.
+  2. Filters in the library (`FilterBar.tsx`, `readAssetFilters` in
+     `api/assets.go`): several kinds, size, added from/to (the web app sends
+     its own midnights as instants), visibility, sort. Sorts page by
+     `(key, id)` with the cursor's key read back by the database, so the
+     cursor stays a plain id; index for size (0008).
+  3. One model for tasks, events, notebooks and boards: `items` (0009, the
+     old `tasks` copied over with the same ids and dropped), `item_links`.
+     `api/items.go`: `apply` is the one place the rules live (task needs a
+     status, event a day, a time needs a day, ticking off a repeating task
+     moves it on, ...), unit-tested in `items_test.go`. `version` counts
+     body/canvas changes only; a stale save gets 409 with the current item.
+     Trash like files, emptied with them; a deleted folder takes its items
+     the same way as its files.
+  4. Time wall rewritten: `TimeWall.tsx` (frame, keys, mini month, tasks),
+     `CalendarViews.tsx` (time grid with drag to make / move / resize,
+     month, quick create), repeats expanded in `lib/days.ts`. Any item opens
+     in the side panel `ItemPanel.tsx` (every part, links, notes).
+  5. Lookout wall (`LookoutWall.tsx`): notebooks (`NotebookEditor.tsx`,
+     Tiptap 3.32.2 + its Markdown and Mathematics extensions, KaTeX 0.19.1,
+     both lazy-loaded) and boards (`Board.tsx`, JSON Canvas 1.0, cards are
+     file nodes `item/<id>`, colours "1".."6" painted per theme as
+     `--c1..--c6`). Saving through `lib/saver.ts`. `ItemTiles.tsx` shows
+     notebooks and boards in library folders, searches and the trash.
+  Smoke test: 187 passed (items replace the tasks checks). Checked in the
+  mock in all three themes.
+
 ## Ideas for next time
+
+- **Mail on the wishes wall** (the user's plan, 2026-11-16): a mail
+  service whose sent letters fly out of the window on the right side of the
+  wishes wall. Not started; questions for the user are open (which
+  account/provider, read mail too or only send, what the letters look like).
 
 - (The three earlier ideas are steps 7 to 9 above.)

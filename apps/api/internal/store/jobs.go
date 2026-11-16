@@ -101,7 +101,12 @@ func (s *Store) RequeueStuckJobs(ctx context.Context, olderThan time.Duration) (
 func (s *Store) ExpiredTrash(ctx context.Context, retention time.Duration) (int64, error) {
 	tag, err := s.Pool.Exec(ctx,
 		`delete from assets where deleted_at < now() - make_interval(secs => $1)`, retention.Seconds())
-	return tag.RowsAffected(), err
+	if err != nil {
+		return 0, err
+	}
+	items, err := s.Pool.Exec(ctx,
+		`delete from items where deleted_at < now() - make_interval(secs => $1)`, retention.Seconds())
+	return tag.RowsAffected() + items.RowsAffected(), err
 }
 
 // StaleUploads removes assets whose upload was started but never finished and

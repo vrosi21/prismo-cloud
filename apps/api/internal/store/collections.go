@@ -199,17 +199,20 @@ func (s *Store) DeleteCollection(ctx context.Context, ownerID, id string, trashF
 		if err != nil {
 			return err
 		}
-		if trashFiles {
-			_, err = tx.Exec(ctx,
-				`update assets set deleted_at = now()
-				 where collection_id = any($1::text[]::uuid[]) and deleted_at is null`, ids)
-		} else {
-			_, err = tx.Exec(ctx,
-				`update assets set collection_id = $2, updated_at = now()
-				 where collection_id = any($1::text[]::uuid[])`, ids, parent)
-		}
-		if err != nil {
-			return err
+		// Notebooks and boards in the folder go the same way as its files.
+		for _, table := range []string{"assets", "items"} {
+			if trashFiles {
+				_, err = tx.Exec(ctx,
+					`update `+table+` set deleted_at = now()
+					 where collection_id = any($1::text[]::uuid[]) and deleted_at is null`, ids)
+			} else {
+				_, err = tx.Exec(ctx,
+					`update `+table+` set collection_id = $2, updated_at = now()
+					 where collection_id = any($1::text[]::uuid[])`, ids, parent)
+			}
+			if err != nil {
+				return err
+			}
 		}
 		// One statement for the whole branch: the parent reference is checked
 		// when the statement ends, by which time parents and children are

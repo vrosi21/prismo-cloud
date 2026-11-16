@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { api, type Asset, type AssetFilter, type AssetSort, type BulkAction, type Visibility } from '../api'
 import { AssetModal } from '../components/AssetModal'
 import { activeFilters, FilterBar } from '../components/FilterBar'
+import { ItemTiles } from '../components/ItemTiles'
 import { Gallery, type SelectMode } from '../components/Gallery'
 import { ShareDialog } from '../components/ShareDialog'
 import { KINDS } from '../components/Shell'
@@ -377,13 +378,16 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
             assets={assets}
             selected={selected}
             header={
-              subfolders.length > 0 && (
-                <div className="mb-6 grid gap-[18px] px-[3px] pt-[3px]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-                  {subfolders.map((f) => (
-                    <FolderTile key={f.id} folder={f} onMoved={refresh} />
-                  ))}
-                </div>
-              )
+              <>
+                {subfolders.length > 0 && (
+                  <div className="mb-6 grid gap-[18px] px-[3px] pt-[3px]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                    {subfolders.map((f) => (
+                      <FolderTile key={f.id} folder={f} onMoved={refresh} />
+                    ))}
+                  </div>
+                )}
+                <ItemTiles trashed={trashed} folderId={flat ? undefined : (folderId ?? 'none')} q={flat ? q : undefined} hidden={flat && !q && !trashed} />
+              </>
             }
             empty={emptyNote}
             onOpen={(a) => setOpenId(a.id)}

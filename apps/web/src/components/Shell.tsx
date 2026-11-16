@@ -11,6 +11,7 @@ import { uploadTarget } from '../lib/target'
 import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/theme'
 import { uploadFiles, uploads } from '../lib/uploads'
 import { Boot, LogLines, Palette, UploadTray, type Command } from './Overlays'
+import { ItemDrawer } from './ItemPanel'
 import { Compass, Room } from './Room'
 import { BmoFace, Cube, Twist, type Mood } from './sprites'
 import { turnTo } from '../lib/room'
@@ -177,6 +178,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
         <main className="screen-door min-w-0 flex-1">{children}</main>
       </Room>
 
+      {me.member && <ItemDrawer />}
       <StatusBar email={me.user.email} member={me.member} />
       <LogLines />
       <UploadTray />

@@ -177,7 +177,8 @@ func (s *Server) sharedAsset(w http.ResponseWriter, r *http.Request, slug string
 // a browser tab gets the share page around the file (player, download
 // button); chat apps building a preview, <img> and <video> tags, download
 // managers and players get the bytes, as before. Only a browser sends
-// Sec-Fetch-Dest, and it says "document" only for a page in a tab.
+// Sec-Fetch-Dest, and it says "document" only for a page in a tab (an
+// iframe is "iframe", fetch() is "empty").
 //
 // ?raw=1 is the direct link: the bytes, even in a tab.
 func wantsPage(r *http.Request) bool {
@@ -185,7 +186,7 @@ func wantsPage(r *http.Request) bool {
 	if q.Has("raw") || q.Get("download") == "1" || q.Get("variant") != "" {
 		return false
 	}
-	return r.Header.Get("Sec-Fetch-Dest") == "document" && r.Header.Get("Sec-Fetch-Mode") == "navigate"
+	return r.Header.Get("Sec-Fetch-Dest") == "document"
 }
 
 // publicFile answers /i/{slug} and /i/{slug}.{ext}. The extension picks a
