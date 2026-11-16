@@ -23,10 +23,10 @@ const BASE = env.PUBLIC_URL
 const mediaDir = mkdtempSync(join(tmpdir(), 'prismo-smoke-'))
 const ffmpeg = 'ffmpeg -hide_banner -loglevel error -y -f lavfi -i'
 execSync(
-  `docker compose exec -T worker sh -c "cd /tmp && ${ffmpeg} testsrc=size=640x360:rate=1 -frames:v 1 t.png && ${ffmpeg} testsrc=size=640x360:rate=15 -t 3 -pix_fmt yuv420p -c:v libx264 t.mp4 && ${ffmpeg} testsrc2=size=320x180:rate=10 -t 2 t.gif && ${ffmpeg} testsrc=size=64x48:rate=10 -t 1 -loop 0 t.webp && ${ffmpeg} testsrc=size=64x48:rate=1 -frames:v 1 still.webp"`,
+  `docker compose exec -T worker sh -c "cd /tmp && ${ffmpeg} testsrc=size=640x360:rate=1 -frames:v 1 t.png && ${ffmpeg} testsrc=size=640x360:rate=15 -t 3 -pix_fmt yuv420p -c:v libx264 t.mp4 && ${ffmpeg} testsrc2=size=320x180:rate=10 -t 2 t.gif && ${ffmpeg} testsrc=size=64x48:rate=10 -t 1 -loop 0 t.webp && ${ffmpeg} testsrc=size=64x48:rate=1 -frames:v 1 still.webp && ${ffmpeg} testsrc=size=320x180:rate=10 -t 1 -c:v libx265 -tag:v hvc1 hevc.mp4"`,
   { cwd: root, stdio: 'inherit' },
 )
-for (const f of ['t.png', 't.mp4', 't.gif', 't.webp', 'still.webp']) execSync(`docker compose cp worker:/tmp/${f} "${join(mediaDir, f)}"`, { cwd: root, stdio: 'ignore' })
+for (const f of ['t.png', 't.mp4', 't.gif', 't.webp', 'still.webp', 'hevc.mp4']) execSync(`docker compose cp worker:/tmp/${f} "${join(mediaDir, f)}"`, { cwd: root, stdio: 'ignore' })
 const media = (n) => readFileSync(join(mediaDir, n))
 
 let cookie = ''
@@ -128,6 +128,19 @@ check('public thumb is webp', r.status === 200 && r.headers.get('content-type') 
 r = await fetch(png.share_url)
 let html = await r.text()
 check('share page has og:image', r.status === 200 && html.includes('property="og:image"') && html.includes('summary_large_image'))
+// A person opening the file link in a browser tab gets the page around it;
+// ?raw=1 (the direct link) gets the file even then.
+const tab = { 'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate' }
+r = await fetch(png.url, { headers: tab })
+html = await r.text()
+check('file link opened in a tab is the share page', r.status === 200 && r.headers.get('content-type')?.startsWith('text/html') && html.includes('direct link') && r.headers.get('vary')?.includes('Sec-Fetch-Dest'), `${r.status} ${r.headers.get('content-type')} vary=${r.headers.get('vary')}`)
+r = await fetch(png.direct_url, { headers: tab })
+buf = Buffer.from(await r.arrayBuffer())
+check('direct link in a tab is the file', png.direct_url === png.url + '?raw=1' && r.status === 200 && buf.equals(media('t.png')), `${png.direct_url} ${r.status}`)
+r = await fetch(png.url, { headers: { 'Sec-Fetch-Dest': 'image', 'Sec-Fetch-Mode': 'no-cors' } })
+check('file link in an <img> is the file', r.status === 200 && r.headers.get('content-type') === 'image/png')
+r = await fetch(png.url + '?download=1', { headers: tab })
+check('download from a tab is the file, as an attachment', r.status === 200 && r.headers.get('content-disposition')?.startsWith('attachment'))
 r = await fetch(png.url, { headers: { 'If-None-Match': r.headers.get('etag') ?? '' } })
 const etag = (await fetch(png.url)).headers.get('etag')
 r = await fetch(png.url, { headers: { 'If-None-Match': etag } })
@@ -153,6 +166,21 @@ check('range request on video gives 206', r.status === 206 && r.headers.get('con
 r = await fetch(vid.share_url)
 html = await r.text()
 check('video share page has og:video', html.includes('property="og:video"') && html.includes('twitter:card" content="player"'))
+r = await fetch(vid.url)
+check('a browser-safe video plays as the file, no sandbox', r.status === 200 && !r.headers.get('content-security-policy')?.includes('sandbox'), r.headers.get('content-security-policy'))
+
+// --- HEVC: plays on the phone that made it, not in most desktop browsers ---
+r = await call('POST', '/v1/upload', { token: upTok, form: multipart('phone.mp4', media('hevc.mp4')) })
+const hevc = r.json
+a = await waitReady(hevc.id)
+check('an HEVC video gets an H.264 copy', a?.kind === 'video' && a.variants.includes('mp4'), JSON.stringify({ k: a?.kind, v: a?.variants }))
+r = await fetch(hevc.url, { headers: tab })
+html = await r.text()
+check('its page plays the copy', html.includes('?variant=mp4'), html.match(/<video[^>]*>/)?.[0])
+// Gone again, so the counts further down stay what they were.
+await call('DELETE', `/v1/assets/${hevc.id}`)
+r = await call('POST', '/v1/assets/bulk', { body: { ids: [hevc.id], action: 'purge' } })
+check('hevc test video purged', r.json?.changed === 1)
 
 // --- gif -> mp4 ---
 r = await call('POST', '/v1/upload', { token: upTok, form: multipart('anim.gif', media('t.gif')) })

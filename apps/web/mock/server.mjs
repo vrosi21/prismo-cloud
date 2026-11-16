@@ -108,6 +108,7 @@ function view(a) {
       thumb: media ? `${file}?variant=thumb&v=mock` : undefined,
       share: `${PUBLIC}/s/${a.slug}`,
       raw: `${PUBLIC}/i/${a.slug}`,
+      direct: `${PUBLIC}/i/${a.slug}?raw=1`,
       raw_gif: a.kind === 'video' ? `${PUBLIC}/i/${a.slug}.gif` : undefined,
     },
   }
@@ -178,10 +179,18 @@ const routes = [
   }],
   ['GET', /^\/v1\/assets$/, (req, m, q) => {
     let list = assets.filter((a) => Boolean(a.deleted_at) === (q.get('trashed') === '1'))
-    if (q.get('kind')) list = list.filter((a) => a.kind === q.get('kind'))
+    if (q.get('kind')) list = list.filter((a) => q.get('kind').split(',').includes(a.kind))
     if (q.get('collection') === 'none') list = list.filter((a) => !a.collection_id)
     else if (q.get('collection')) list = list.filter((a) => a.collection_id === q.get('collection'))
     if (q.get('q')) list = list.filter((a) => (a.title + a.filename).includes(q.get('q')))
+    if (q.get('min')) list = list.filter((a) => a.bytes >= Number(q.get('min')))
+    if (q.get('max')) list = list.filter((a) => a.bytes <= Number(q.get('max')))
+    if (q.get('from')) list = list.filter((a) => Date.parse(a.created_at) >= Date.parse(q.get('from')))
+    if (q.get('to')) list = list.filter((a) => Date.parse(a.created_at) < Date.parse(q.get('to')))
+    if (q.get('vis')) list = list.filter((a) => a.visibility === q.get('vis'))
+    const name = (a) => (a.title || a.filename).toLowerCase()
+    const sorts = { old: (x, y) => x.created_at.localeCompare(y.created_at), big: (x, y) => y.bytes - x.bytes, small: (x, y) => x.bytes - y.bytes, name: (x, y) => name(x).localeCompare(name(y)) }
+    if (sorts[q.get('sort')]) list = [...list].sort(sorts[q.get('sort')])
     const start = q.get('cursor') ? list.findIndex((a) => a.id === q.get('cursor')) + 1 : 0
     const page = list.slice(start, start + 60)
     return [200, { assets: page.map(view), next_cursor: start + 60 < list.length ? page.at(-1).id : null }]

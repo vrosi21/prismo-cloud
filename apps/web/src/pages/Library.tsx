@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
-import { api, type Asset, type AssetFilter, type BulkAction, type Visibility } from '../api'
+import { api, type Asset, type AssetFilter, type AssetSort, type BulkAction, type Visibility } from '../api'
 import { AssetModal } from '../components/AssetModal'
+import { activeFilters, FilterBar } from '../components/FilterBar'
 import { Gallery, type SelectMode } from '../components/Gallery'
 import { ShareDialog } from '../components/ShareDialog'
 import { KINDS } from '../components/Shell'
@@ -28,13 +29,29 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
   const tag = params.get('tag') ?? undefined
   const q = params.get('q') ?? undefined
   const everything = params.get('view') === 'all'
-  const flat = trashed || Boolean(kind || tag || q || everything)
+  const filterCount = activeFilters(params)
+  // A filter inside a folder narrows that folder; at the top it looks
+  // through every folder, like a search.
+  const flat = trashed || Boolean(tag || q || everything || (!folderId && filterCount > 0))
+  const [showFilters, setShowFilters] = useState(filterCount > 0)
 
   // What is shown lives in the URL: a view can be bookmarked, and Back works.
-  const filter = useMemo<AssetFilter>(
-    () => (trashed ? { trashed: true } : flat ? { kind, tag, q } : { collection: folderId ?? 'none' }),
-    [trashed, flat, kind, tag, q, folderId],
-  )
+  const paramsKey = params.toString()
+  const filter = useMemo<AssetFilter>(() => {
+    const p = new URLSearchParams(paramsKey)
+    const narrow: AssetFilter = {
+      kind,
+      min: p.get('min') ?? undefined,
+      max: p.get('max') ?? undefined,
+      from: p.get('from') ?? undefined,
+      to: p.get('to') ?? undefined,
+      vis: (p.get('vis') as Visibility | null) ?? undefined,
+      sort: (p.get('sort') as AssetSort | null) ?? undefined,
+    }
+    if (trashed) return { trashed: true, ...narrow }
+    if (flat) return { tag, q, ...narrow }
+    return { collection: folderId ?? 'none', ...narrow }
+  }, [trashed, flat, kind, tag, q, folderId, paramsKey])
   const query = useAssets(filter)
   const assets = useMemo(() => query.data?.pages.flatMap((p) => p.assets) ?? [], [query.data])
   const tree = useFolderTree()
@@ -158,7 +175,13 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
     setParams(next)
   }
 
-  const flatTitle = trashed ? 'trash' : q ? 'search' : kind ? (KINDS.find((k) => k.id === kind)?.label ?? kind) : tag ? `#${tag}` : 'everything'
+  const oneKind = kind && !kind.includes(',') ? KINDS.find((k) => k.id === kind)?.label : undefined
+  const flatTitle = trashed ? 'trash' : q ? 'search' : tag ? `#${tag}` : filterCount === 1 && oneKind ? oneKind : filterCount > 0 ? 'filtered' : 'everything'
+  const filterButton = !trashed || assets.length > 0 || filterCount > 0 ? (
+    <button type="button" className="btn btn-sm" aria-pressed={showFilters} aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)}>
+      {filterCount > 0 ? `filters (${filterCount})` : 'filters'}
+    </button>
+  ) : null
 
   const header =
     selected.size > 0 ? (
@@ -245,6 +268,7 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
         {trashed && me && <span className="dim">&gt; deleted for good after {me.limits.trash_retention_days} days</span>}
         {!trashed && <span className="dim hidden lg:inline">&gt; files from every folder</span>}
         <span className="flex-1" />
+        {filterButton}
         {assets.length > 0 && (
           <button type="button" className="btn btn-sm" onClick={() => void selectAll()} title="Ctrl+A">
             select all
@@ -263,6 +287,7 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
           ))}
         </nav>
         <span className="flex-1" />
+        {filterButton}
         <button type="button" className="btn btn-sm" aria-pressed={panel === 'new'} onClick={() => setPanel(panel === 'new' ? null : 'new')}>
           new folder
         </button>
@@ -295,8 +320,10 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
   const emptyNote = flat ? (
     <Centered>
       <Prismo />
-      <p>{trashed ? '> trash is empty.' : '> nothing matches.'}</p>
+      <p>{trashed && filterCount === 0 ? '> trash is empty.' : '> nothing matches.'}</p>
     </Centered>
+  ) : filterCount > 0 ? (
+    <p className="dim px-1 py-4">&gt; no file in this folder matches the filters.</p>
   ) : subfolders.length > 0 ? (
     <p className="dim px-1 py-4">&gt; no files directly in here.</p>
   ) : (
@@ -310,6 +337,8 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
   return (
     <div className="flex h-full flex-col gap-3">
       <div className="panel px flex min-h-[44px] flex-wrap items-center gap-x-3 gap-y-3 px-3 py-2">{header}</div>
+
+      {showFilters && selected.size === 0 && <FilterBar params={params} setParams={setParams} onClose={() => setShowFilters(false)} />}
 
       {panel && selected.size === 0 && !flat && (
         <FolderPanel

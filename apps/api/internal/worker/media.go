@@ -19,6 +19,10 @@ type probeResult struct {
 	DurationMS int
 	Format     string
 	HasVideo   bool
+	// WebSafe: the picture is coded so that every browser plays it (H.264 in
+	// 8-bit 4:2:0, or VP8/VP9/AV1). A phone's HEVC or a 10-bit export plays on
+	// the phone that made it and nowhere else, so it gets an H.264 copy.
+	WebSafe bool
 }
 
 // probe asks ffprobe what is really inside the file.
@@ -26,6 +30,8 @@ func probe(ctx context.Context, path string) (probeResult, error) {
 	var out struct {
 		Streams []struct {
 			CodecType string `json:"codec_type"`
+			CodecName string `json:"codec_name"`
+			PixFmt    string `json:"pix_fmt"`
 			Width     int    `json:"width"`
 			Height    int    `json:"height"`
 		} `json:"streams"`
@@ -46,6 +52,7 @@ func probe(ctx context.Context, path string) (probeResult, error) {
 	for _, st := range out.Streams {
 		if st.CodecType == "video" && st.Width > 0 {
 			res.Width, res.Height, res.HasVideo = st.Width, st.Height, true
+			res.WebSafe = webSafe(st.CodecName, st.PixFmt)
 			break
 		}
 	}
@@ -53,6 +60,16 @@ func probe(ctx context.Context, path string) (probeResult, error) {
 		res.DurationMS = int(secs * 1000)
 	}
 	return res, nil
+}
+
+func webSafe(codec, pixFmt string) bool {
+	switch codec {
+	case "h264":
+		return pixFmt == "yuv420p" || pixFmt == "yuvj420p"
+	case "vp8", "vp9", "av1":
+		return true
+	}
+	return false
 }
 
 // sniff decides the content type from the file's first bytes, never from the

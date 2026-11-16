@@ -142,7 +142,7 @@ const VISIBILITY_TEXT: Record<Visibility, string> = {
   public: 'public',
 }
 
-type LinkKind = 'url' | 'gif_url' | 'share_url'
+type LinkKind = 'url' | 'gif_url' | 'share_url' | 'direct_url'
 
 // A ShareX "custom uploader" file. Importing it makes ShareX send every
 // capture here.
@@ -322,7 +322,8 @@ function FreshToken({ publicUrl, secret, name, mayLook, onDone }: FreshTokenProp
         <label>
           <span className="label">sharex: link it gets back</span>
           <select className="field" value={link} onChange={(e) => setLink(e.target.value as LinkKind)}>
-            <option value="url">the file itself</option>
+            <option value="url">the file (a page in a browser)</option>
+            <option value="direct_url">the file only, also in a browser</option>
             <option value="gif_url">gif version of recordings</option>
             <option value="share_url">page with preview</option>
           </select>

@@ -82,7 +82,14 @@ func (s *Server) serveAsset(w http.ResponseWriter, r *http.Request, a store.Asse
 	h.Set("ETag", `"`+sha+`"`)
 	h.Set("Cache-Control", cache)
 	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Content-Security-Policy", "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox")
+	csp := "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'"
+	if !inlineSafe[mimeType] {
+		// A download is never shown, but if a browser did render it, it would
+		// be in a sandbox. Pictures and videos cannot run script, and some
+		// browsers refuse to play a video in a sandboxed tab, so not those.
+		csp += "; sandbox"
+	}
+	h.Set("Content-Security-Policy", csp)
 	h.Set("Cross-Origin-Resource-Policy", "cross-origin")
 	// ServeContent answers Range and If-None-Match, which video players and
 	// caches rely on.
@@ -166,12 +173,33 @@ func (s *Server) sharedAsset(w http.ResponseWriter, r *http.Request, slug string
 	return a, true
 }
 
+// wantsPage tells a person from a program. Someone who opens a file link in
+// a browser tab gets the share page around the file (player, download
+// button); chat apps building a preview, <img> and <video> tags, download
+// managers and players get the bytes, as before. Only a browser sends
+// Sec-Fetch-Dest, and it says "document" only for a page in a tab.
+//
+// ?raw=1 is the direct link: the bytes, even in a tab.
+func wantsPage(r *http.Request) bool {
+	q := r.URL.Query()
+	if q.Has("raw") || q.Get("download") == "1" || q.Get("variant") != "" {
+		return false
+	}
+	return r.Header.Get("Sec-Fetch-Dest") == "document" && r.Header.Get("Sec-Fetch-Mode") == "navigate"
+}
+
 // publicFile answers /i/{slug} and /i/{slug}.{ext}. The extension picks a
 // version: .gif of a recording is its GIF, .mp4 of a GIF is its video.
 func (s *Server) publicFile(w http.ResponseWriter, r *http.Request) {
 	slug, ext, _ := strings.Cut(chi.URLParam(r, "name"), ".")
 	a, ok := s.sharedAsset(w, r, slug)
 	if !ok {
+		return
+	}
+	// The same URL answers a page or a file, so caches must keep them apart.
+	w.Header().Add("Vary", "Sec-Fetch-Dest")
+	if wantsPage(r) {
+		s.renderSharePage(w, a)
 		return
 	}
 	role := r.URL.Query().Get("variant")
@@ -198,6 +226,7 @@ type sharePageData struct {
 	Title     string
 	PageURL   string
 	RawURL    string
+	DirectURL string
 	ThumbURL  string
 	VideoURL  string
 	VideoMime string
@@ -217,14 +246,19 @@ func (s *Server) sharePage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	s.renderSharePage(w, a)
+}
+
+func (s *Server) renderSharePage(w http.ResponseWriter, a store.Asset) {
 	v := s.view(a)
 	d := sharePageData{
-		Title:   a.Title,
-		PageURL: v.URLs["share"],
-		RawURL:  v.URLs["raw"],
-		Mime:    a.Mime,
-		Size:    humanBytes(a.Bytes),
-		Failed:  a.Status != "ready",
+		Title:     a.Title,
+		PageURL:   v.URLs["share"],
+		RawURL:    v.URLs["raw"],
+		DirectURL: v.URLs["direct"],
+		Mime:      a.Mime,
+		Size:      humanBytes(a.Bytes),
+		Failed:    a.Status != "ready",
 	}
 	if d.Title == "" {
 		d.Title = a.Filename
@@ -242,8 +276,10 @@ func (s *Server) sharePage(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case a.Kind == "video":
 		d.IsVideo, d.VideoURL, d.VideoMime = true, v.URLs["raw"], a.Mime
-		if a.Mime != "video/mp4" && a.Mime != "video/webm" && a.Variant("mp4") != nil {
-			d.VideoURL, d.VideoMime = base+".mp4", "video/mp4"
+		// The worker makes an MP4 exactly when the file itself would not
+		// play everywhere (a .mov, an HEVC recording), so it wins when it exists.
+		if a.Variant("mp4") != nil {
+			d.VideoURL, d.VideoMime = base+"?variant=mp4", "video/mp4"
 		}
 	case inlineSafe[a.Mime]:
 		d.IsImage = true

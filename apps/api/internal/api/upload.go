@@ -426,9 +426,11 @@ func (s *Server) uploadResult(a store.Asset, duplicate bool) map[string]any {
 		"id":        a.ID,
 		"url":       v.URLs["raw"],
 		"share_url": v.URLs["share"],
-		"gif_url":   gif,
-		"thumb_url": base + "?variant=thumb",
-		"duplicate": duplicate,
-		"asset":     v,
+		// The file itself, also when opened in a browser tab.
+		"direct_url": v.URLs["direct"],
+		"gif_url":    gif,
+		"thumb_url":  base + "?variant=thumb",
+		"duplicate":  duplicate,
+		"asset":      v,
 	}
 }

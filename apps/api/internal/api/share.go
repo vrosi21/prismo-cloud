@@ -61,6 +61,8 @@ var sharePageTmpl = template.Must(template.New("share").Parse(`<!doctype html>
          text-decoration:none; font-weight:700;
          box-shadow: 0 calc(-1*var(--px)) 0 0 var(--ink), 0 var(--px) 0 0 var(--ink),
                      calc(-1*var(--px)) 0 0 0 var(--ink), var(--px) 0 0 0 var(--ink); }
+  .btn-plain { background:var(--panel); color:var(--ink); }
+  .row { display:flex; flex-wrap:wrap; gap:16px; justify-content:center; }
 </style>
 </head>
 <body>
@@ -76,7 +78,10 @@ var sharePageTmpl = template.Must(template.New("share").Parse(`<!doctype html>
   {{- end}}
   <h1>{{.Title}}</h1>
   <p>{{.Mime}} · {{.Size}}{{if .Width}} · {{.Width}}×{{.Height}}{{end}}</p>
-  <a class="btn" href="{{.RawURL}}?download=1">download</a>
+  <div class="row">
+    <a class="btn" href="{{.RawURL}}?download=1">download</a>
+    <a class="btn btn-plain" href="{{.DirectURL}}">direct link</a>
+  </div>
 </main>
 </body>
 </html>

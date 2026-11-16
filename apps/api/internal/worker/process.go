@@ -118,9 +118,12 @@ func (w *Worker) examine(ctx context.Context, assetID, dir, src, sha string, siz
 				}
 			}
 		}
+		// Unknown until probed; a file that cannot be probed is left as it is.
+		webSafe := true
 		if p, err := probe(ctx, play); err != nil {
 			slog.Warn("probe failed", "asset", assetID, "err", err)
 		} else if p.HasVideo {
+			webSafe = p.WebSafe
 			if out.Width == nil {
 				out.Width, out.Height = &p.Width, &p.Height
 			}
@@ -128,7 +131,7 @@ func (w *Worker) examine(ctx context.Context, assetID, dir, src, sha string, siz
 				out.DurationMS = &p.DurationMS
 			}
 		}
-		variants = append(variants, w.derive(ctx, assetID, dir, play, out)...)
+		variants = append(variants, w.derive(ctx, assetID, dir, play, out, webSafe)...)
 	}
 
 	return pgx.BeginFunc(ctx, w.store.Pool, func(tx pgx.Tx) error {
@@ -146,14 +149,16 @@ func (w *Worker) examine(ctx context.Context, assetID, dir, src, sha string, siz
 
 // derive makes the extra versions of a media file. Each one is best effort:
 // an asset without a thumbnail is still a usable asset.
-func (w *Worker) derive(ctx context.Context, assetID, dir, src string, p store.Processed) []store.Variant {
+func (w *Worker) derive(ctx context.Context, assetID, dir, src string, p store.Processed, webSafe bool) []store.Variant {
 	type step struct {
 		role, mime, file string
 		make             func(out string) error
 	}
 	steps := []step{{"thumb", "image/webp", "thumb.webp", func(out string) error { return makeThumb(ctx, src, out) }}}
 
-	needMP4 := p.Kind == "gif" || (p.Kind == "video" && p.Mime != "video/mp4" && p.Mime != "video/webm")
+	// Players get an H.264 MP4 whenever the file itself would not play in
+	// every browser: a GIF, a .mov or .mkv, or an MP4 coded as HEVC.
+	needMP4 := p.Kind == "gif" || (p.Kind == "video" && (!webSafe || (p.Mime != "video/mp4" && p.Mime != "video/webm")))
 	if needMP4 {
 		steps = append(steps, step{"mp4", "video/mp4", "video.mp4", func(out string) error { return makeMP4(ctx, src, out) }})
 	}

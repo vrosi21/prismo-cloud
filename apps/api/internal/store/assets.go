@@ -153,12 +153,47 @@ func (s *Store) AssetByBlob(ctx context.Context, ownerID, sha string) (Asset, er
 type AssetFilter struct {
 	OwnerID      string
 	Trashed      bool
-	Kind         string
-	CollectionID string // uuid, or "none" for assets without a collection
+	Kinds        []string // any of these; empty is every kind
+	CollectionID string   // uuid, or "none" for assets without a collection
 	Tag          string
 	Query        string
+	MinBytes     int64 // 0: no lower bound
+	MaxBytes     int64 // 0: no upper bound
+	AddedFrom    *time.Time
+	AddedBefore  *time.Time
+	Visibility   string // "", "private", "unlisted" or "public"
+	Sort         string // one of AssetSorts; "" is the newest first
 	Cursor       string // id of the last asset on the previous page
 	Limit        int
+}
+
+// AssetSorts are the orders a listing can come in. Each ends with the id, so
+// two files of the same size (or name) still have a fixed order, and a page
+// can start right after the last file of the one before.
+var AssetSorts = map[string]struct{ key, dir string }{
+	"":      {"", "desc"},
+	"old":   {"", "asc"},
+	"big":   {"a.bytes", "desc"},
+	"small": {"a.bytes", "asc"},
+	"name":  {"lower(coalesce(nullif(a.title, ''), a.filename))", "asc"},
+}
+
+// order is the ORDER BY of a sort, and after the condition for "comes after
+// the asset with the cursor id". The cursor's own sort value is read back
+// by the database, so a page boundary never depends on Go and Postgres
+// agreeing on how a name is lowercased.
+func (f AssetFilter) order(cursorArg int) (order, after string) {
+	s := AssetSorts[f.Sort]
+	cmp := "<"
+	if s.dir == "asc" {
+		cmp = ">"
+	}
+	if s.key == "" {
+		return "a.id " + s.dir, fmt.Sprintf("a.id %s $%d", cmp, cursorArg)
+	}
+	inner := strings.ReplaceAll(s.key, "a.", "c.")
+	return s.key + " " + s.dir + ", a.id " + s.dir,
+		fmt.Sprintf("(%s, a.id) %s (select %s, c.id from assets c where c.id = $%d)", s.key, cmp, inner, cursorArg)
 }
 
 // where turns the filter into SQL conditions. Paging (cursor, limit) is left
@@ -176,8 +211,23 @@ func (f AssetFilter) where() (conds []string, args []any) {
 	} else {
 		conds = append(conds, "a.deleted_at is null")
 	}
-	if f.Kind != "" {
-		add("a.kind = $%d", f.Kind)
+	if len(f.Kinds) > 0 {
+		add("a.kind = any($%d)", f.Kinds)
+	}
+	if f.MinBytes > 0 {
+		add("a.bytes >= $%d", f.MinBytes)
+	}
+	if f.MaxBytes > 0 {
+		add("a.bytes <= $%d", f.MaxBytes)
+	}
+	if f.AddedFrom != nil {
+		add("a.created_at >= $%d", *f.AddedFrom)
+	}
+	if f.AddedBefore != nil {
+		add("a.created_at < $%d", *f.AddedBefore)
+	}
+	if f.Visibility != "" {
+		add("a.visibility = $%d", f.Visibility)
 	}
 	if f.CollectionID == "none" {
 		conds = append(conds, "a.collection_id is null")
@@ -212,13 +262,14 @@ func (s *Store) ListAssetIDs(ctx context.Context, f AssetFilter, limit int) ([]s
 
 func (s *Store) ListAssets(ctx context.Context, f AssetFilter) ([]Asset, error) {
 	conds, args := f.where()
+	order, after := f.order(len(args) + 1)
 	if f.Cursor != "" {
 		args = append(args, f.Cursor)
-		conds = append(conds, fmt.Sprintf("a.id < $%d", len(args)))
+		conds = append(conds, after)
 	}
 	args = append(args, f.Limit)
 	sql := `select ` + assetCols + ` from assets a where ` + strings.Join(conds, " and ") +
-		fmt.Sprintf(" order by a.id desc limit $%d", len(args))
+		fmt.Sprintf(" order by %s limit $%d", order, len(args))
 
 	rows, err := s.Pool.Query(ctx, sql, args...)
 	if err != nil {

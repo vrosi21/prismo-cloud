@@ -273,17 +273,27 @@ function Details({ asset, folders, onClose }: { asset: Asset; folders: FolderNod
         <div className="flex flex-wrap gap-x-3 gap-y-4 pt-1">
           {owner && (
             <>
-              <button type="button" className="btn btn-accent" onClick={() => share('link', asset.urls.raw)}>
+              <button
+                type="button"
+                className="btn btn-accent"
+                onClick={() => share('link', asset.urls.raw)}
+                title="opened in a browser it shows the prismo page with a player and a download button; a chat app shows the file"
+              >
                 {asset.visibility === 'private' ? 'share + copy link' : 'copy link'}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => share('direct link', asset.urls.direct)}
+                title="the file itself, with no page around it, even when opened in a browser"
+              >
+                copy direct link
               </button>
               {asset.variants.includes('gif') && (
                 <button type="button" className="btn" onClick={() => share('gif link', asset.urls.raw_gif)}>
                   copy gif link
                 </button>
               )}
-              <button type="button" className="btn" onClick={() => share('page link', asset.urls.share)}>
-                copy page link
-              </button>
               <button type="button" className="btn" onClick={() => setSharing(true)}>
                 share with a person
               </button>

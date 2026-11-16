@@ -117,12 +117,26 @@ export interface Stats {
 
 export interface AssetFilter {
   trashed?: boolean
+  /** One kind, or several joined with commas. */
   kind?: string
   /** A folder id, or "none" for files that are in no folder. Unset: every folder. */
   collection?: string
   tag?: string
   q?: string
+  /** Size in bytes, both ends included. */
+  min?: string
+  max?: string
+  /** Added on or after / on or before these days (YYYY-MM-DD). */
+  from?: string
+  to?: string
+  vis?: Visibility
+  sort?: AssetSort
 }
+
+export type AssetSort = 'old' | 'big' | 'small' | 'name'
+
+/** The filters a listing can take beyond folder, tag and search, as they appear in the URL. */
+export const FILTER_KEYS = ['kind', 'min', 'max', 'from', 'to', 'vis', 'sort'] as const
 
 export interface AssetPage {
   assets: Asset[]
@@ -199,12 +213,24 @@ function query(params: Record<string, string | undefined>): string {
   return s ? `?${s}` : ''
 }
 
+// The instant a day of the viewer's own calendar starts, plus some days.
+function localMidnight(day: string, plusDays = 0): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(y, m - 1, d + plusDays).toISOString()
+}
+
 const filterParams = (f: AssetFilter) => ({
   trashed: f.trashed ? '1' : undefined,
   kind: f.kind,
   collection: f.collection,
   tag: f.tag,
   q: f.q,
+  min: f.min,
+  max: f.max,
+  from: f.from && localMidnight(f.from),
+  to: f.to && localMidnight(f.to, 1),
+  vis: f.vis,
+  sort: f.sort,
 })
 
 export const api = {

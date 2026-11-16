@@ -783,3 +783,8 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 /* Media is content, not chrome: never pixelate what the user uploaded. */
 .sprite { image-rendering: pixelated; }
 } /* end @layer components */
+
+/* ---- filters over a listing of files ---- */
+.filter-bar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px 22px; padding: 10px 12px; }
+.filter-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.filter-group .label { margin: 0; }

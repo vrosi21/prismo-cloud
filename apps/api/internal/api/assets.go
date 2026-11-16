@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -63,7 +65,11 @@ func (s *Server) view(a store.Asset) assetView {
 	}
 	public := s.cfg.PublicURL
 	v.URLs["share"] = public + "/s/" + a.Slug
+	// raw is the link to hand out: a person who opens it in a browser gets
+	// the share page around the file, a chat app or an <img> gets the file.
+	// direct is the file itself, even in a browser tab.
 	v.URLs["raw"] = public + "/i/" + a.Slug + extFor(a)
+	v.URLs["direct"] = v.URLs["raw"] + "?raw=1"
 	// A recording has a GIF version, and so has an animation that is not a
 	// GIF file itself (animated WebP).
 	if a.Variant("gif") != nil {
@@ -125,7 +131,6 @@ const maxSelectAll = 5000
 // decided by the caller, never by the query string.
 func (s *Server) writeAssetPage(w http.ResponseWriter, r *http.Request, f store.AssetFilter, level int, extra map[string]any) {
 	q := r.URL.Query()
-	f.Kind = q.Get("kind")
 	f.Tag = strings.ToLower(strings.TrimSpace(q.Get("tag")))
 	f.Query = strings.TrimSpace(q.Get("q"))
 	f.Cursor = q.Get("cursor")
@@ -133,8 +138,8 @@ func (s *Server) writeAssetPage(w http.ResponseWriter, r *http.Request, f store.
 	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 && n <= 200 {
 		f.Limit = n
 	}
-	if f.Kind != "" && !validKind(f.Kind) {
-		writeErr(w, http.StatusBadRequest, "unknown kind")
+	if msg := readAssetFilters(q, &f); msg != "" {
+		writeErr(w, http.StatusBadRequest, msg)
 		return
 	}
 	if f.Cursor != "" && !isUUID(f.Cursor) {
@@ -179,6 +184,72 @@ func (s *Server) writeAssetPage(w http.ResponseWriter, r *http.Request, f store.
 		out[k] = v
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// readAssetFilters reads the filters of a listing from its query string:
+//
+//	kind=image,gif          any of these kinds
+//	min=1048576 max=...     size in bytes, both ends included
+//	from=2026-11-01         added on or after that day (UTC), or that instant
+//	to=2026-11-30           added on or before that day, or before that instant
+//	vis=private             who can open it by link
+//	sort=big                old, big, small, name; newest first without it
+//
+// It returns what is wrong with them, or "".
+func readAssetFilters(q url.Values, f *store.AssetFilter) string {
+	if k := q.Get("kind"); k != "" {
+		for _, kind := range strings.Split(k, ",") {
+			if !validKind(kind) {
+				return "unknown kind"
+			}
+			f.Kinds = append(f.Kinds, kind)
+		}
+	}
+	for name, to := range map[string]*int64{"min": &f.MinBytes, "max": &f.MaxBytes} {
+		if v := q.Get(name); v != "" {
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil || n < 0 {
+				return name + " must be a number of bytes"
+			}
+			*to = n
+		}
+	}
+	if f.MaxBytes > 0 && f.MinBytes > f.MaxBytes {
+		return "min is larger than max"
+	}
+	// A day is a UTC day. The web app sends the instants its own midnights
+	// fall on instead, so "today" means the viewer's today.
+	if v := q.Get("from"); v != "" {
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			if t, err = time.Parse(time.DateOnly, v); err != nil {
+				return "from must be a day like 2026-11-01 or a time"
+			}
+		}
+		f.AddedFrom = &t
+	}
+	if v := q.Get("to"); v != "" {
+		end, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			t, err := time.Parse(time.DateOnly, v)
+			if err != nil {
+				return "to must be a day like 2026-11-30 or a time"
+			}
+			end = t.AddDate(0, 0, 1) // the whole of that day
+		}
+		f.AddedBefore = &end
+	}
+	if v := q.Get("vis"); v != "" {
+		if !validVisibility(v) {
+			return "vis must be private, unlisted or public"
+		}
+		f.Visibility = v
+	}
+	f.Sort = q.Get("sort")
+	if _, ok := store.AssetSorts[f.Sort]; !ok {
+		return "sort must be old, big, small or name"
+	}
+	return ""
 }
 
 func (s *Server) getAsset(w http.ResponseWriter, r *http.Request) {
