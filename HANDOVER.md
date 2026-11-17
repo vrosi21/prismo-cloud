@@ -316,6 +316,10 @@ screen switching camera feeds: no swing, at most a moment of static.
 
 ## Ideas for next time
 
+- Settings, restructured: its own side panel to the right of the main one,
+  sections in it (tokens, sign-in, look, helper) instead of one long page
+  (user, 2026-11-17).
+
 - **Mail on the wishes wall** (the user's plan, 2026-11-16): a mail
   service whose sent letters fly out of the window on the right side of the
   wishes wall. Not started; questions for the user are open (which
