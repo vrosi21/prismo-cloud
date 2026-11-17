@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { api } from '../api'
-import { openOnLookout, titleOf, useItems } from '../lib/items'
+import { openOnLookout, titleOf, useItems, useWholeItem } from '../lib/items'
 import { plainExcerpt } from '../lib/minimd'
 import { errorText, log } from '../lib/log'
 import { useQueryClient } from '@tanstack/react-query'
@@ -12,7 +12,9 @@ import { useQueryClient } from '@tanstack/react-query'
  */
 export function ItemTiles({ folderId, q, trashed, hidden }: { folderId?: string; q?: string; trashed: boolean; hidden: boolean }) {
   const qc = useQueryClient()
-  const { data = [] } = useItems({ kind: 'notebook,board', collection: trashed ? undefined : folderId, q: q || undefined, trashed }, !hidden)
+  const whole = useWholeItem()
+  // The trash shows tasks and events too: it is the only place to get one back.
+  const { data = [] } = useItems({ kind: trashed ? undefined : 'notebook,board', collection: trashed ? undefined : folderId, q: q || undefined, trashed }, !hidden)
   if (hidden || data.length === 0) return null
 
   const act = async (run: () => Promise<void>, done: string) => {
@@ -27,7 +29,7 @@ export function ItemTiles({ folderId, q, trashed, hidden }: { folderId?: string;
 
   return (
     <section aria-label="notebooks and boards">
-      <h3 className="section-title uppercase">{trashed ? 'notebooks & boards in the trash' : 'notebooks & boards'}</h3>
+      <h3 className="section-title uppercase">{trashed ? 'notebooks, boards & tasks in the trash' : 'notebooks & boards'}</h3>
       <div className="item-tiles">
         {data.map((it) => (
           <div key={it.id} className="item-tile" style={it.color ? ({ '--tile': `var(--c${it.color})` } as CSSProperties) : undefined}>
@@ -40,7 +42,7 @@ export function ItemTiles({ folderId, q, trashed, hidden }: { folderId?: string;
             </button>
             {trashed && (
               <div className="flex gap-2 pt-1">
-                <button type="button" className="btn btn-sm btn-accent" onClick={() => act(() => api.updateItem(it.id, { trashed: false }).then(() => undefined), 'restored')}>
+                <button type="button" className="btn btn-sm btn-accent" onClick={() => void whole.restore(it)}>
                   restore
                 </button>
                 <button type="button" className="btn btn-sm" onClick={() => act(() => api.purgeItem(it.id), 'deleted for good')}>

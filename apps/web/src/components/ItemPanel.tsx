@@ -2,9 +2,9 @@ import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, type Item, type ItemChange, type ItemKind, type Repeat } from '../api'
 import { hhmm, length, minutesOf, plusDays, today } from '../lib/days'
-import { COLORS, KINDS, openAnywhere, openItem, openOnLookout, STATUSES, titleOf, useItem, useItemChanges, useItems } from '../lib/items'
+import { COLORS, KINDS, openAnywhere, openItem, openOnLookout, STATUSES, titleOf, useItem, useItemChanges, useItems, useWholeItem } from '../lib/items'
 import { errorText, log } from '../lib/log'
-import { useFolderTree } from '../lib/queries'
+import { FolderPick } from './FolderPick'
 import { useContentSaver } from '../lib/saver'
 import { useStore } from '../lib/store'
 import { Boundary } from './Boundary'
@@ -58,7 +58,7 @@ function ItemView({ id, onClose }: { id: string; onClose: () => void }) {
 /** Every part of an item, each saved as soon as it changes. */
 export function ItemForm({ item, onClose, full = false }: { item: Item; onClose?: () => void; full?: boolean }) {
   const { update, trash, create } = useItemChanges()
-  const tree = useFolderTree()
+  const whole = useWholeItem()
   const [title, setTitle] = useState(item.title)
   useEffect(() => setTitle(item.title), [item.title])
   const set = (change: ItemChange) => update.mutate({ id: item.id, change })
@@ -251,14 +251,7 @@ export function ItemForm({ item, onClose, full = false }: { item: Item; onClose?
       <Tags item={item} onSave={(tags) => set({ tags })} />
 
       <Row label="folder">
-        <select className="field !w-auto max-w-full" value={item.collection_id ?? ''} onChange={(e) => set({ collection_id: e.target.value || null })}>
-          <option value="">top of the library</option>
-          {tree.flat.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.path}
-            </option>
-          ))}
-        </select>
+        <FolderPick value={item.collection_id} onPick={(to) => to !== item.collection_id && void whole.move(item, to)} className="!w-auto max-w-full" />
       </Row>
 
       <Links item={item} />

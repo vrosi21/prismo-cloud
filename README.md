@@ -126,6 +126,10 @@ boards whose cards point at them (`lib/bundle.ts` describes the format). It is h
 board starts with real content; [docs/boards/prismo-roadmap.json](docs/boards/prismo-roadmap.json)
 is Prismo's own roadmap. Personal bundles go in `local/`, which git ignores.
 
+A page's header says which folder it is in and moves it (or makes a new folder); "trash"
+is next to it. A board takes its own cards along, the ones in the same folder as the
+board, when it moves, goes to the trash or comes back from it.
+
 **One kind of thing underneath.** Tasks, events, notebooks and boards are all *items*
 with the same parts: a title, a text, a folder, a colour, links to other items, and
 optionally a day (then it is on the calendar), a status (then it is a task) or a canvas

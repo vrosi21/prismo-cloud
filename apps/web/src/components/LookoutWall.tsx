@@ -3,13 +3,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { Item } from '../api'
 import { importBundle, readBundle } from '../lib/bundle'
 import { short } from '../lib/days'
-import { lookout, openItem, openOnLookout, titleOf, useItem, useItemChanges, useItems } from '../lib/items'
+import { lookout, openItem, openOnLookout, titleOf, useItem, useItemChanges, useItems, useOwnCardCount, useWholeItem } from '../lib/items'
 import { errorText, log } from '../lib/log'
 import { useFolderTree } from '../lib/queries'
 import { useContentSaver } from '../lib/saver'
 import { useStore } from '../lib/store'
 import { ConflictBar, Notes, SaveNote } from './ItemPanel'
 import { Boundary } from './Boundary'
+import { FolderPick } from './FolderPick'
 import { Cube, Prismo } from './sprites'
 
 const Board = lazy(() => import('./Board'))
@@ -90,17 +91,10 @@ export function LookoutWall() {
             />
           </label>
         </div>
-        <label className="flex flex-col gap-1">
-          <span className="label">new ones go in</span>
-          <select className="field" value={into ?? ''} onChange={(e) => pickFolder(e.target.value)}>
-            <option value="">top of the library</option>
-            {tree.flat.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.path}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-col gap-1">
+          <span className="label">new ones &amp; imports go in</span>
+          <FolderPick value={into} onPick={(id) => pickFolder(id ?? '')} />
+        </div>
         <input className="field" placeholder="find in titles and text" value={q} onChange={(e) => setQ(e.target.value)} aria-label="find" />
         <ul className="lookout-list">
           {isPending && <Cube size={32} label="loading" />}
@@ -160,14 +154,19 @@ function Page({ id }: { id: string }) {
 
 function PageHead({ item }: { item: Item }) {
   const { update } = useItemChanges()
-  const tree = useFolderTree()
+  const whole = useWholeItem()
+  const cards = useOwnCardCount(item)
+  const [asking, setAsking] = useState(false)
   const [title, setTitle] = useState(item.title)
   useEffect(() => setTitle(item.title), [item.title])
   const save = () => {
     const t = title.trim()
     if (t !== item.title && (t || (item.kind !== 'task' && item.kind !== 'event'))) update.mutate({ id: item.id, change: { title: t } })
   }
-  const folder = item.collection_id ? tree.byId.get(item.collection_id)?.path : null
+  const toTrash = (withCards: boolean) => {
+    lookout.set(null)
+    void whole.trash(item, withCards)
+  }
   return (
     <div className="lookout-head">
       <input
@@ -182,13 +181,34 @@ function PageHead({ item }: { item: Item }) {
       />
       <div className="flex flex-wrap items-center gap-3">
         <span className="kind-tag">{item.kind}</span>
-        <span className="dim">{folder ? `in ${folder}` : 'top of the library'}</span>
+        <span className="dim">in</span>
+        <span title={cards ? `its ${cards} cards in the same folder move along` : undefined}>
+          <FolderPick value={item.collection_id} onPick={(to) => to !== item.collection_id && void whole.move(item, to)} className="!w-auto max-w-[260px]" />
+        </span>
         {item.date && <span className="dim">· {short(item.date)}</span>}
         {(item.links?.length ?? 0) > 0 && <span className="dim">· {item.links!.length} linked</span>}
         <span className="flex-1" />
-        <button type="button" className="btn btn-sm" onClick={() => openItem.set(item.id)} title="folder, day, colour, links...">
+        <button type="button" className="btn btn-sm" onClick={() => openItem.set(item.id)} title="day, colour, tags, links...">
           details
         </button>
+        {asking ? (
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="dim">trash:</span>
+            <button type="button" className="btn btn-sm btn-accent" onClick={() => toTrash(true)}>
+              board + its {cards} cards
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => toTrash(false)}>
+              board only
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => setAsking(false)}>
+              keep
+            </button>
+          </span>
+        ) : (
+          <button type="button" className="btn btn-sm" onClick={() => (cards > 0 ? setAsking(true) : toTrash(false))} title="to the trash; the library's trash gives it back">
+            trash
+          </button>
+        )}
         <button type="button" className="btn btn-sm" onClick={() => lookout.set(null)} aria-label="close">
           x
         </button>

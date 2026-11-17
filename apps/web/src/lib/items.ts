@@ -84,6 +84,65 @@ export function useItemChanges() {
   }
 }
 
+/** The items a board shows as cards, in the order they are on it. */
+export const cardIdsOf = (board: Pick<Item, 'canvas'>) =>
+  (board.canvas?.nodes ?? []).flatMap((n) => (n.type === 'file' && n.file.startsWith('item/') ? [n.file.slice(5)] : []))
+
+// A board's own cards are the ones in the same folder as the board (an
+// import puts them there together). They move and go to the trash with it;
+// a card brought over from another folder stays where it is.
+const ownOf = (board: Item, cards: Item[]) => cards.filter((c) => c.id !== board.id && c.collection_id === board.collection_id)
+
+async function ownCards(board: Item): Promise<Item[]> {
+  const ids = board.kind === 'board' ? [...new Set(cardIdsOf(board))] : []
+  return ids.length ? ownOf(board, await api.items({ ids })) : []
+}
+
+/** How many cards would go along with a board; 0 for anything else. */
+export function useOwnCardCount(board: Item) {
+  const ids = board.kind === 'board' ? cardIdsOf(board) : []
+  const { data = [] } = useItems({ ids }, ids.length > 0)
+  return ids.length ? ownOf(board, data).length : 0
+}
+
+/** Moving a notebook or a board to another folder, or to the trash; a board takes its own cards along. */
+export function useWholeItem() {
+  const qc = useQueryClient()
+  const run = async (what: () => Promise<string>) => {
+    try {
+      log('ok', await what())
+    } catch (e) {
+      log('err', errorText(e))
+    } finally {
+      void qc.invalidateQueries({ queryKey: ['items'] })
+    }
+  }
+  return {
+    move: (it: Item, to: string | null) =>
+      run(async () => {
+        qc.setQueryData<Item>(['items', 'one', it.id], (old) => old && { ...old, collection_id: to })
+        const cards = await ownCards(it)
+        await Promise.all([it, ...cards].map((x) => api.updateItem(x.id, { collection_id: to })))
+        return cards.length ? `moved, with its ${cards.length} cards` : 'moved'
+      }),
+    trash: (it: Item, withCards: boolean) =>
+      run(async () => {
+        const cards = withCards ? await ownCards(it) : []
+        await Promise.all([...cards, it].map((x) => api.trashItem(x.id)))
+        return cards.length ? `in the trash, with its ${cards.length} cards` : 'moved to the trash'
+      }),
+    /** Out of the trash; a board brings back its own cards that are in there too. */
+    restore: (it: Item) =>
+      run(async () => {
+        const full = it.kind === 'board' ? await api.item(it.id) : it
+        const ids = full.kind === 'board' ? [...new Set(cardIdsOf(full))] : []
+        const cards = ids.length ? ownOf(full, await api.items({ ids, trashed: true })) : []
+        await Promise.all([full, ...cards].map((x) => api.updateItem(x.id, { trashed: false })))
+        return cards.length ? `restored, with its ${cards.length} cards` : 'restored'
+      }),
+  }
+}
+
 /** The item open in the side panel, whichever wall is faced. */
 export const openItem = createStore<string | null>(null)
 

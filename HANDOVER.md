@@ -253,6 +253,15 @@ screen switching camera feeds: no swing, at most a moment of static.
   "No such file or directory" and skipped `prismo front`). Not run: the
   smoke test for 0010 (Docker Desktop's engine answered 500 all session).
 
+- Step 15 (2026-11-17, the user imported the roadmap into their "dsai"
+  folder by mistake and found no way to move it, make a folder, or delete
+  the board: those were only in "details"). The lookout page header has a
+  folder picker and "trash"; every folder picker (`FolderPick`) can make a
+  new folder. `useWholeItem` (lib/items.ts): a board moves, goes to the
+  trash and comes back with its own cards (cards in the same folder as the
+  board). The library's trash lists tasks and events too; before, a
+  trashed task could not be got back. Checked in the mock.
+
 ## Ideas for next time
 
 - **Mail on the wishes wall** (the user's plan, 2026-11-16): a mail
