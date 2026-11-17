@@ -1,7 +1,8 @@
 # Sets up Prismo Cloud's desktop helper on this Windows PC, for you only:
 #
-#   - every new capture (Windows' own screenshots, ShareX) is uploaded by itself
-#   - after the upload, Ctrl+V still pastes the capture; its link is one step back in Win+V
+#   - every new capture (Windows' own screenshots, ShareX) is uploaded by itself, into a
+#     folder a month (screenshots/2026/11); the clipboard keeps just the capture
+#   - with -Link, its link is also put one step back in Win+V after the upload
 #   - a hotkey brings up the picker: a sticker or GIF from the cloud, pasted into any chat
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\install-helper.ps1 -Url https://<your site> -Token prismo_...
@@ -20,15 +21,17 @@
 param(
     [string]$Url,
     [string]$Token,
-    # Folder in the cloud captures go into; "screenshots/2026" works too.
-    [string]$Folder = 'screenshots',
+    # Folder in the cloud captures go into; {year} and {month} are the capture's.
+    # "screenshots" puts them all in one.
+    [string]$Folder = 'screenshots/{year}/{month}',
     # Brings up the picker. "off": no picker.
     [string]$Hotkey = 'win+shift+g',
     [ValidateSet('timeroom', 'multiverse', 'bmo')][string]$Theme = 'timeroom',
     # Picker only: captures are not uploaded (ShareX or something else does that).
     [switch]$NoUploads,
-    # Leave the clipboard alone after an upload.
-    [switch]$NoLink,
+    # After an upload, put the link one step back in Win+V (the clipboard gets the
+    # capture a second time for that).
+    [switch]$Link,
     [switch]$Remove
 )
 
@@ -83,14 +86,14 @@ if (Test-Path $loader) { Copy-Item $loader $home_ -Force }
 
 $arguments = "-folder `"$Folder`" -hotkey `"$Hotkey`" -theme $Theme"
 if ($NoUploads) { $arguments += ' -watch=false' }
-if ($NoLink) { $arguments += ' -link=false' }
+if ($Link) { $arguments += ' -link' }
 
-$link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
-$link.TargetPath = $exe
-$link.Arguments = $arguments
-$link.WorkingDirectory = $home_
-$link.Description = 'Uploads captures to Prismo Cloud; stickers and GIFs on a hotkey'
-$link.Save()
+$lnk = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+$lnk.TargetPath = $exe
+$lnk.Arguments = $arguments
+$lnk.WorkingDirectory = $home_
+$lnk.Description = 'Uploads captures to Prismo Cloud; stickers and GIFs on a hotkey'
+$lnk.Save()
 
 # The variables above reach new sign-ins; this session needs them set directly.
 $env:PRISMO_URL = $Url
@@ -111,7 +114,7 @@ if (-not $NoUploads) {
     $watching = $said | Where-Object { $_ -like '*watching * -> *' } | Select-Object -First 1
     if ($watching -match 'watching (.+) -> ') { "  Uploads new captures from: $($Matches[1])" }
     "  They go to the folder '$Folder'. Private or not is the token's setting, in the web app."
-    if (-not $NoLink) { '  After an upload: Ctrl+V pastes the capture, Win+V has its link one step back.' }
+    if ($Link) { '  After an upload: Ctrl+V pastes the capture, Win+V has its link one step back.' }
 }
 if ($Hotkey -ne 'off') {
     if ($said -match 'picker ready') {

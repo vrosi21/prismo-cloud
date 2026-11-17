@@ -283,6 +283,17 @@ screen switching camera feeds: no swing, at most a moment of static.
   194/194 with 0010 and 0011. Checked in the mock; the browser pane was
   hidden, so the tree layout was checked from a drawing of the bundle.
 
+- Step 17 (2026-11-17): "prompt" on the lookout shows
+  `apps/web/src/bundle-prompt.md`, the instructions a Claude session needs
+  to write a bundle (the user asked for it before anything else; the same
+  file was sent to them). Small checkboxes got room for their outside
+  border (lists that scroll and board cards cut it off). Desktop helper:
+  captures go to `screenshots/{year}/{month}` (`watch.FolderFor`), and the
+  link trick is off by default (`-link`; it put the capture on the
+  clipboard twice next to the link, "2 images and 1 link"). ShareX was
+  already only copying and saving. The helper on the user's PC was
+  rebuilt, swapped and restarted with the new shortcut arguments.
+
 ## Ideas for next time
 
 - **Mail on the wishes wall** (the user's plan, 2026-11-16): a mail

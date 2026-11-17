@@ -1,11 +1,12 @@
 // Command prismo-helper is Prismo Cloud's desktop helper for Windows. It sits
 // in the background and does three things:
 //
-//   - uploads every new capture from the screenshot folders, as prismo-watch does;
+//   - uploads every new capture from the screenshot folders, as prismo-watch does,
+//     into a folder a month (screenshots/2026/11), and leaves the clipboard alone;
 //
-//   - after such an upload, leaves the link in the clipboard history, one
-//     step behind the capture itself: Ctrl+V pastes the picture, Win+V has
-//     the link;
+//   - with -link, after such an upload, also leaves the link in the clipboard
+//     history, one step behind the capture itself: Ctrl+V pastes the picture,
+//     Win+V has the link (and the picture twice: the clipboard gets it again);
 //
 //   - on a hotkey, brings up the picker: type, Enter, and a sticker or GIF
 //     from the cloud is pasted into the window that was being used.
@@ -55,9 +56,9 @@ func main() {
 		hotkey     = flag.String("hotkey", "win+shift+g", `brings up the picker, e.g. ctrl+f9; "off" for no picker`)
 		theme      = flag.String("theme", "timeroom", "look of the picker: timeroom, multiverse or bmo")
 		uploads    = flag.Bool("watch", true, "upload new captures from the watched folders")
-		folder     = flag.String("folder", "screenshots", "folder in the cloud captures go into, e.g. screenshots/2026")
+		folder     = flag.String("folder", "screenshots/{year}/{month}", `folder in the cloud captures go into; {year} and {month} are the capture's, e.g. "screenshots" for all in one`)
 		visibility = flag.String("visibility", "", "private, unlisted or public; empty: as the token is set")
-		link       = flag.Bool("link", true, "after an upload, leave the link in the clipboard history behind the capture")
+		link       = flag.Bool("link", false, "after an upload, leave the link in the clipboard history behind the capture (puts the capture on the clipboard a second time)")
 		logPath    = flag.String("log", filepath.Join(home, "helper.log"), "where the log is written")
 	)
 	flag.Parse()

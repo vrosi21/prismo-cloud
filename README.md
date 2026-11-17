@@ -133,6 +133,9 @@ up everything that leads to it. Boards are saved as
 boards whose cards point at them (`lib/bundle.ts` describes the format). It is how a
 board starts with real content; [docs/boards/prismo-roadmap.json](docs/boards/prismo-roadmap.json)
 is Prismo's own roadmap. Personal bundles go in `local/`, which git ignores.
+"prompt", next to import, shows the instructions a Claude session needs to write one
+([apps/web/src/bundle-prompt.md](apps/web/src/bundle-prompt.md)): copy them under what
+you ask for, save the JSON that comes back, import it.
 
 The list on the left is a folder tree, the library's folders (those holding only files
 stay out of it): "+ folder", or "+" on a folder for one inside it; pressing a folder
@@ -297,11 +300,14 @@ The web app hands you the second line ready to paste, right after creating the t
 Building needs Docker, nothing else. What the helper does:
 
 - **Uploads every capture.** It watches the folder Windows saves screenshots to and the
-  one ShareX saves to, subfolders included. Nothing is lost while the PC is offline: it
-  carries on from where it stopped.
-- **Leaves the link behind the capture.** After the upload, Ctrl+V still pastes the
-  picture, and the clipboard history (Win+V) has its link one step back. If you copied
-  something else in the meantime, the clipboard is left alone. `-NoLink` switches this off.
+  one ShareX saves to, subfolders included, and files each capture by its month:
+  `screenshots/2026/11` (`-Folder screenshots` puts them all in one; `{year}` and
+  `{month}` work in any folder name). Nothing is lost while the PC is offline: it carries
+  on from where it stopped. The clipboard keeps just the capture.
+- **The link, if you want it.** With `-Link`, after the upload the clipboard history
+  (Win+V) has the capture's link one step back, Ctrl+V still pasting the picture; for
+  that the picture goes on the clipboard a second time. If you copied something else
+  in the meantime, the clipboard is left alone.
 - **Picker.** Press Win+Shift+G anywhere: type a few letters, Enter, and the sticker or
   GIF is pasted into the window you were in. Tab goes through stickers, GIFs, pictures,
   everything; Esc closes. A picture is pasted as a picture (with its see-through parts),

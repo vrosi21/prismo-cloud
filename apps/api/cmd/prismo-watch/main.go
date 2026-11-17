@@ -26,7 +26,7 @@ func main() {
 		dir        = flag.String("dir", watch.ScreenshotsDir(), "folder to watch, subfolders included")
 		baseURL    = flag.String("url", os.Getenv("PRISMO_URL"), "Prismo Cloud address")
 		token      = flag.String("token", os.Getenv("PRISMO_TOKEN"), "API token (one that may add files is enough)")
-		folder     = flag.String("folder", "screenshots", "folder in the cloud new files go into, e.g. screenshots/2026")
+		folder     = flag.String("folder", "screenshots", `folder in the cloud new files go into; {year} and {month} are the file's, e.g. "screenshots/{year}/{month}"`)
 		visibility = flag.String("visibility", "", "private, unlisted or public; empty: as the token is set")
 		interval   = flag.Duration("interval", 2*time.Second, "how often to look for new files")
 		backfill   = flag.Bool("backfill", false, "also upload files that are already in the folder")

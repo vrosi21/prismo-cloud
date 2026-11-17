@@ -776,7 +776,9 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 .status-pill[data-status="doing"], .chip[data-status="doing"][aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .status-pill[data-status="waiting"], .chip[data-status="waiting"][aria-pressed="true"] { background: var(--c2); color: var(--ink); }
 .status-pill[data-status="done"], .chip[data-status="done"][aria-pressed="true"] { background: var(--ok); color: var(--panel); }
-.check-sm { width: calc(var(--px) * 5); height: calc(var(--px) * 5); margin: 1px; }
+/* The border is drawn outside the box (box-shadow), one --px wide: the margin keeps
+   room for it, or a list that scrolls or a card that clips cuts it off. */
+.check-sm { width: calc(var(--px) * 5); height: calc(var(--px) * 5); margin: 2px var(--px); }
 .check-sm::before { transform: scale(0.75); }
 .link-btn { color: var(--ink); cursor: pointer; text-align: left; }
 .link-btn:hover { color: var(--accent-deep); text-decoration: underline; }
@@ -1105,3 +1107,4 @@ input.board-group-label { width: 280px; height: auto; }
 .pin-title:hover { color: var(--accent); }
 .pin-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 16px; }
 .pin-soon { color: var(--accent); }
+.bundle-prompt { min-height: 0; flex: 1; margin: 0; padding: 10px 12px; overflow: auto; background: var(--bg-deep); color: var(--ink); font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.45; white-space: pre-wrap; user-select: text; }

@@ -34,7 +34,7 @@ type Options struct {
 	Dirs       []string      // folders to watch, subfolders included
 	URL        string        // Prismo Cloud address
 	Token      string        // may add files; nothing more is needed
-	Folder     string        // folder in the cloud, by path; made when missing
+	Folder     string        // folder in the cloud, by path; made when missing (see FolderFor)
 	Visibility string        // empty: whatever the token is set to
 	Source     string        // what the cloud shows as "via"
 	Interval   time.Duration // how often to look
@@ -112,7 +112,7 @@ func Run(ctx context.Context, o Options) error {
 			if t := tries[f.path]; t != nil && time.Now().Before(t.next) {
 				continue
 			}
-			link, err := upload(ctx, endpoint, f.path, o)
+			link, err := upload(ctx, endpoint, f.path, FolderFor(o.Folder, f.modTime), o)
 			var refused *refusedError
 			switch {
 			case err == nil:
@@ -204,14 +204,22 @@ type refusedError struct{ msg string }
 
 func (e *refusedError) Error() string { return e.msg }
 
-func upload(ctx context.Context, endpoint, path string, o Options) (string, error) {
+// FolderFor is the cloud folder for a file made at t: "{year}" and "{month}"
+// in the pattern become its year and month, so "screenshots/{year}/{month}"
+// files a capture of November 2026 under screenshots/2026/11, the months of
+// a year side by side in its folder.
+func FolderFor(pattern string, t time.Time) string {
+	return strings.NewReplacer("{year}", t.Format("2006"), "{month}", t.Format("01")).Replace(pattern)
+}
+
+func upload(ctx context.Context, endpoint, path, folder string, o Options) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
-	fields := map[string]string{"collection": o.Folder, "visibility": o.Visibility, "source": o.Source}
+	fields := map[string]string{"collection": folder, "visibility": o.Visibility, "source": o.Source}
 	// Stream through a pipe: the file is never held in memory as a whole.
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)

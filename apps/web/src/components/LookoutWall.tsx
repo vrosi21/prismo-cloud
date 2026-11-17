@@ -10,6 +10,7 @@ import { useContentSaver } from '../lib/saver'
 import { useStore } from '../lib/store'
 import { ConflictBar, Notes, SaveNote } from './ItemPanel'
 import { Boundary } from './Boundary'
+import { BundlePrompt } from './BundlePrompt'
 import { FolderPick } from './FolderPick'
 import { LookoutTree } from './LookoutTree'
 import { Pinned } from './Pinned'
@@ -50,6 +51,7 @@ export function LookoutWall() {
   }
   const qc = useQueryClient()
   const [importing, setImporting] = useState<string | null>(null)
+  const [asking, setAsking] = useState(false)
   const runImport = async (file: File) => {
     try {
       const bundle = readBundle(await file.text())
@@ -92,7 +94,11 @@ export function LookoutWall() {
               }}
             />
           </label>
+          <button type="button" className="btn btn-sm" aria-pressed={asking} onClick={() => setAsking(true)} title="instructions for a Claude session to write a file for import">
+            prompt
+          </button>
         </div>
+        {asking && <BundlePrompt onClose={() => setAsking(false)} />}
         <div className="flex flex-col gap-1">
           <span className="label">new ones &amp; imports go in</span>
           <FolderPick value={into} onPick={(id) => pickFolder(id ?? '')} />
