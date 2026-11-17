@@ -1,0 +1,143 @@
+name: CI
+
+# Every push to main and every pull request is tested. A push to main that passes is then
+# deployed, the server first and the web app after it, once deploying has been switched
+# on (deploy/setup-ci.sh does that). Modelled on DSAI Vault's CI.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # A newer push to a pull request replaces the older run; runs on main always finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  GO_IMAGE: golang:1.27-alpine
+
+jobs:
+  api:
+    name: API (Go)
+    runs-on: ubuntu-latest
+    steps:
+      # Every action is named by the commit of a release, not by a tag: a tag can be moved
+      # to other code later, a commit cannot. The deploy jobs below hold the keys to the
+      # server and to Cloudflare, so what runs here is fixed until changed on purpose.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: bash .github/scripts/pull-image.sh "$GO_IMAGE"
+      # The same Go as the Dockerfile, so there is no second toolchain to keep in step.
+      - name: Format, vet, test
+        run: >
+          docker run --rm -v "$PWD/apps/api:/src" -w /src "$GO_IMAGE" sh -c '
+          unformatted="$(gofmt -l .)";
+          if [ -n "$unformatted" ]; then echo "needs gofmt: $unformatted"; exit 1; fi;
+          go vet ./... &&
+          GOOS=windows go vet ./cmd/prismo-helper ./internal/watch &&
+          go test ./...'
+
+  web:
+    name: Web app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # pnpm at the version package.json names (packageManager).
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc -b
+      - run: pnpm build
+
+  smoke:
+    name: Whole stack, end to end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Fetch the images
+        run: >
+          bash .github/scripts/pull-image.sh "$GO_IMAGE" alpine:3.22 node:22-alpine caddy:2-alpine
+          postgres:18-alpine dxflrs/garage:v2.4.1
+      # The example settings: local addresses, development sign-in, throwaway secrets.
+      - run: cp .env.example .env
+      - name: Start the stack
+        run: |
+          docker compose up -d --build
+          for _ in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:8080/v1/auth/config && exit 0
+            sleep 2
+          done
+          docker compose logs --tail 60
+          exit 1
+      - run: node scripts/smoke.mjs
+      - name: Logs, when something failed
+        if: failure()
+        run: docker compose logs --tail 120
+
+  deploy-server:
+    name: Deploy the server
+    needs: [api, web, smoke]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: bash .github/scripts/pull-image.sh "$GO_IMAGE" alpine:3.22
+      - name: Build the image
+        run: docker build --quiet --tag "prismo-api:${GITHUB_SHA::12}" apps/api
+      # No third-party action touches the key: it is written to a file and used by ssh.
+      # On the server the key is pinned to `prismo ci`, which accepts exactly this
+      # request: back up, load the image, start it, wait until the API answers.
+      - name: Send it to the server
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          docker save "prismo-api:${GITHUB_SHA::12}" | gzip |
+            ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes \
+              "$DEPLOY_TARGET" "deploy ${GITHUB_SHA::12}"
+
+  deploy-web:
+    name: Deploy the web app
+    # After the server: a new web app may call what only the new server has.
+    needs: [deploy-server]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-web
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Publish on Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >
+          npx --yes wrangler@4.157.0 pages deploy dist --project-name prismo-cloud --branch main
+          --commit-hash "$GITHUB_SHA" --commit-dirty=true

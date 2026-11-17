@@ -10,6 +10,8 @@
 #   prismo status          containers, health, and whether the front Caddy still knows us
 #   prismo logs [service]  recent log lines
 #   prismo backup          dump the database to backups/, keep the newest 14
+#   prismo ci              what GitHub Actions' deploy key may run (deploy/setup-ci.sh):
+#                          "deploy <commit>", the image on standard input
 #
 # Everything runs in Docker as an ordinary user; nothing needs root.
 
@@ -222,8 +224,38 @@ backup)
 	echo "    $file ($(du -h "$file" | cut -f1))"
 	;;
 
+ci)
+	# The deploy key of GitHub Actions is pinned to this command (deploy/setup-ci.sh,
+	# authorized_keys "restrict,command=..."), so ssh hands over what was asked in
+	# SSH_ORIGINAL_COMMAND. Exactly one request is accepted: "deploy <commit>", with the
+	# image as a gzipped `docker save` stream on standard input. compose.yaml and this
+	# script are not changed from here; deploy/deploy.sh does that, by hand.
+	request="${SSH_ORIGINAL_COMMAND:-}"
+	pattern='^deploy ([0-9a-f]{7,40})$'
+	if [[ ! "$request" =~ $pattern ]]; then
+		echo "this key may only run: deploy <commit>" >&2
+		exit 1
+	fi
+	tag="prismo-api:${BASH_REMATCH[1]}"
+	echo "==> deploying $tag"
+	"$self" backup
+	# The image running now stays at hand: if the new one does not come up, it goes back.
+	docker image inspect prismo-api:live >/dev/null 2>&1 && docker tag prismo-api:live prismo-api:previous
+	"$self" load "$tag"
+	if "$self" up; then
+		echo "==> $tag is live"
+		exit 0
+	fi
+	if docker image inspect prismo-api:previous >/dev/null 2>&1; then
+		echo "==> $tag did not come up; going back to the previous image" >&2
+		docker tag prismo-api:previous prismo-api:live
+		"$self" up >&2 || true
+	fi
+	exit 1
+	;;
+
 *)
-	sed -n '2,14p' "$self" | sed 's/^# \{0,1\}//'
+	sed -n '2,16p' "$self" | sed 's/^# \{0,1\}//'
 	exit 1
 	;;
 esac
