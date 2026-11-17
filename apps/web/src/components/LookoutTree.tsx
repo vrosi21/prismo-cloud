@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, type Folder, type Item } from '../api'
 import type { FolderNode } from '../lib/folders'
 import { lookout, titleOf } from '../lib/items'
+import { folderEntries, openMenu } from '../lib/menu'
+import { useItemEntries } from './Menus'
 import { errorText, log } from '../lib/log'
 import { useFolderTree, useRefreshLibrary } from '../lib/queries'
 
@@ -32,6 +34,7 @@ interface Props {
 
 export function LookoutTree({ items, open, target, onTarget, when }: Props) {
   const tree = useFolderTree()
+  const itemEntries = useItemEntries()
   const [shut, setShutState] = useState(loadShut)
   // undefined: not making one; null: at the top; an id: inside that folder.
   const [making, setMaking] = useState<string | null | undefined>(undefined)
@@ -80,7 +83,15 @@ export function LookoutTree({ items, open, target, onTarget, when }: Props) {
 
   const itemRow = (it: Item, depth: number) => (
     <li key={it.id}>
-      <button type="button" className="lookout-row" style={{ paddingLeft: 4 + depth * 14 }} aria-current={open === it.id || undefined} onClick={() => lookout.set(it.id)} data-nav-item>
+      <button
+        type="button"
+        className="lookout-row"
+        style={{ paddingLeft: 4 + depth * 14 }}
+        aria-current={open === it.id || undefined}
+        onClick={() => lookout.set(it.id)}
+        onContextMenu={(e) => openMenu(e, itemEntries(it))}
+        data-nav-item
+      >
         <span className="kind-tag" data-kind={it.kind}>
           {it.kind}
         </span>
@@ -96,7 +107,12 @@ export function LookoutTree({ items, open, target, onTarget, when }: Props) {
       const c = inside.get(n.id)
       return (
         <li key={n.id}>
-          <div className="tree-folder" style={{ paddingLeft: depth * 14 }} aria-current={target === n.id || undefined}>
+          <div
+            className="tree-folder"
+            style={{ paddingLeft: depth * 14 }}
+            aria-current={target === n.id || undefined}
+            onContextMenu={(e) => openMenu(e, folderEntries(n.id, [{ label: target === n.id ? 'new ones go to the top again' : 'new ones and imports go here', run: () => onTarget(target === n.id ? null : n.id) }, 'sep']))}
+          >
             <button type="button" className="tree-toggle" onClick={() => setShut(n.id, !isShut)} aria-label={isShut ? `open ${n.name}` : `close ${n.name}`} aria-expanded={!isShut}>
               {isShut ? '+' : '-'}
             </button>
@@ -115,6 +131,15 @@ export function LookoutTree({ items, open, target, onTarget, when }: Props) {
               aria-label={`new folder inside ${n.name}`}
             >
               +
+            </button>
+            <button
+              type="button"
+              className="tree-add"
+              onClick={(e) => openMenu(e, folderEntries(n.id))}
+              title="rename, move, delete"
+              aria-label={`more for ${n.name}`}
+            >
+              ...
             </button>
           </div>
           {!isShut && (

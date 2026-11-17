@@ -94,8 +94,11 @@ export const cardIdsOf = (board: Pick<Item, 'canvas'>) =>
 const ownOf = (board: Item, cards: Item[]) => cards.filter((c) => c.id !== board.id && c.collection_id === board.collection_id)
 
 async function ownCards(board: Item): Promise<Item[]> {
-  const ids = board.kind === 'board' ? [...new Set(cardIdsOf(board))] : []
-  return ids.length ? ownOf(board, await api.items({ ids })) : []
+  if (board.kind !== 'board') return []
+  // A board from a list comes without its canvas.
+  const full = board.canvas ? board : await api.item(board.id)
+  const ids = [...new Set(cardIdsOf(full))]
+  return ids.length ? ownOf(full, await api.items({ ids })) : []
 }
 
 /** How many cards would go along with a board; 0 for anything else. */

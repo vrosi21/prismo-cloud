@@ -8,6 +8,8 @@ import { typing } from '../lib/spatial'
 import { useStore } from '../lib/store'
 import { MonthGrid, QuickCreate, TimeGrid, type Draft } from './CalendarViews'
 import { MoveChoice } from './Appearance'
+import { useItemEntries } from './Menus'
+import { openMenu } from '../lib/menu'
 import { KeyCap } from './KeyCap'
 
 // The time wall: a calendar the way Google's works, and a task list beside
@@ -261,6 +263,7 @@ function MiniMonth({ anchor, onPick, items }: { anchor: string; onPick: (day: st
  */
 function TaskList({ items, anchor }: { items: Item[]; anchor: string }) {
   const { create, update } = useItemChanges()
+  const itemEntries = useItemEntries()
   const [title, setTitle] = useState('')
   const [onDay, setOnDay] = useState(false)
   const [showDone, setShowDone] = useState(false)
@@ -275,7 +278,7 @@ function TaskList({ items, anchor }: { items: Item[]; anchor: string }) {
     create.mutate({ item: { kind: 'task', title: title.trim(), date: onDay ? anchor : null } }, { onSuccess: () => setTitle('') })
   }
   const row = (it: Item) => (
-    <li key={it.id} className="task" data-done={it.status === 'done' || undefined} data-status={it.status ?? undefined}>
+    <li key={it.id} className="task" data-done={it.status === 'done' || undefined} data-status={it.status ?? undefined} onContextMenu={(e) => openMenu(e, itemEntries(it))}>
       <input
         type="checkbox"
         className="check"

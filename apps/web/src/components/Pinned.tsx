@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react'
+import { useMemo, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, type Item } from '../api'
 import { NONE, topsOf } from '../lib/categories'
@@ -6,6 +6,8 @@ import { nextOf, over, relDay, type Occurrence } from '../lib/days'
 import { openOnLookout, titleOf, useItemChanges, useItems } from '../lib/items'
 import { errorText, log } from '../lib/log'
 import { pinOf, withPin } from '../lib/pins'
+import { openMenu } from '../lib/menu'
+import { useItemEntries } from './Menus'
 import { Cube, Prismo } from './sprites'
 
 // The pinned board, what the lookout shows when nothing is open: pinned
@@ -34,6 +36,7 @@ function order(a: Pin, b: Pin): number {
 export function Pinned() {
   const { data: all = [], isPending } = useItems({})
   const { update } = useItemChanges()
+  const itemEntries = useItemEntries()
   const qc = useQueryClient()
 
   const cats = useMemo(() => {
@@ -89,7 +92,12 @@ export function Pinned() {
                   {live.length === 0 && <p className="dim">&gt; nothing left here.</p>}
                   <ul className="flex flex-col gap-1">
                     {live.map((p) => (
-                      <PinRow key={p.it.id} p={p} onToggle={() => update.mutate({ id: p.it.id, change: { status: p.it.status === 'done' ? 'todo' : 'done' } })} />
+                      <PinRow
+                        key={p.it.id}
+                        p={p}
+                        onToggle={() => update.mutate({ id: p.it.id, change: { status: p.it.status === 'done' ? 'todo' : 'done' } })}
+                        onMenu={(e, it) => openMenu(e, itemEntries(it))}
+                      />
                     ))}
                   </ul>
                   {gone.length > 0 && (
@@ -107,14 +115,14 @@ export function Pinned() {
   )
 }
 
-function PinRow({ p, onToggle }: { p: Pin; onToggle: () => void }) {
+function PinRow({ p, onToggle, onMenu }: { p: Pin; onToggle: () => void; onMenu: (e: ReactMouseEvent, it: Item) => void }) {
   const { it, next } = p
   const own = next && next.item.title !== it.title ? next.item.title : null
   const type = facet(it, 'type')
   const course = facet(it, 'course')
   const soon = next ? `${relDay(next.date)}${next.item.time ? ` ${next.item.time}` : ''}` : it.date ? '' : 'no day yet'
   return (
-    <li className="pin-row" style={it.color ? ({ '--pin': `var(--c${it.color})` } as CSSProperties) : undefined}>
+    <li className="pin-row" onContextMenu={(e) => onMenu(e, it)} style={it.color ? ({ '--pin': `var(--c${it.color})` } as CSSProperties) : undefined}>
       {it.status && <input type="checkbox" className="check check-sm" checked={it.status === 'done'} aria-label={`done: ${titleOf(it)}`} onChange={onToggle} />}
       <button type="button" className="pin-title" onClick={() => openOnLookout(it.id)} title="open it as a page">
         {own ?? titleOf(it)}

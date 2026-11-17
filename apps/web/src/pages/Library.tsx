@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { api, type Asset, type AssetFilter, type AssetSort, type BulkAction, type Visibility } from '../api'
@@ -6,17 +6,18 @@ import { AssetModal } from '../components/AssetModal'
 import { activeFilters, FilterBar } from '../components/FilterBar'
 import { ItemTiles } from '../components/ItemTiles'
 import { Gallery, type SelectMode } from '../components/Gallery'
+import { FolderPanel, type FolderAction } from '../components/FolderPanel'
 import { ShareDialog } from '../components/ShareDialog'
 import { KINDS } from '../components/Shell'
 import { BmoFace, Cube, FolderIcon, Prismo } from '../components/sprites'
 import { bulkAll, moves, useAssetDrop } from '../lib/drag'
-import { crumbsOf, isInside, type FolderNode } from '../lib/folders'
+import { crumbsOf, type FolderNode } from '../lib/folders'
 import { errorText, log } from '../lib/log'
 import { useAssets, useFolders, useFolderTree, useMe, useRefreshLibrary } from '../lib/queries'
 import { useStore } from '../lib/store'
 import { useUploadTarget } from '../lib/target'
 
-type Panel = null | 'new' | 'rename' | 'move' | 'delete'
+type Panel = null | FolderAction
 
 // One page, two ways of looking:
 //  - a folder (or the top level): its subfolders, then the files directly in
@@ -344,9 +345,8 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
       {panel && selected.size === 0 && !flat && (
         <FolderPanel
           key={panel}
-          panel={panel}
+          action={panel}
           folder={folder}
-          parentId={folderId}
           onClose={() => setPanel(null)}
           onDeleted={(parent) => navigate(parent ? `/?folder=${parent}` : '/')}
         />
@@ -429,128 +429,5 @@ function FolderTile({ folder, onMoved }: { folder: FolderNode; onMoved: () => vo
       <span className="min-w-0 flex-1 truncate">{folder.name}</span>
       <span className="count-badge shrink-0">{folder.count}</span>
     </Link>
-  )
-}
-
-interface FolderPanelProps {
-  panel: Exclude<Panel, null>
-  /** The folder on screen; undefined at the top level. */
-  folder: FolderNode | undefined
-  /** Where a new folder goes. */
-  parentId: string | null
-  onClose: () => void
-  onDeleted: (parentId: string | null) => void
-}
-
-// The strip under the header for the one thing being done to a folder.
-function FolderPanel({ panel, folder, parentId, onClose, onDeleted }: FolderPanelProps) {
-  const tree = useFolderTree()
-  const refresh = useRefreshLibrary()
-  const [name, setName] = useState(panel === 'rename' ? (folder?.name ?? '') : '')
-  const [dest, setDest] = useState<string>(folder?.parent_id ?? 'top')
-  const fail = (e: unknown) => log('err', errorText(e))
-  const done = () => {
-    refresh()
-    onClose()
-  }
-
-  const create = useMutation({ mutationFn: () => api.createFolder(name.trim(), parentId), onSuccess: done, onError: fail })
-  const rename = useMutation({ mutationFn: () => api.updateFolder(folder!.id, { name: name.trim() }), onSuccess: done, onError: fail })
-  const move = useMutation({
-    mutationFn: () => api.updateFolder(folder!.id, { parent_id: dest === 'top' ? null : dest }),
-    onSuccess: done,
-    onError: fail,
-  })
-  const remove = useMutation({
-    mutationFn: (trashFiles: boolean) => api.deleteFolder(folder!.id, trashFiles),
-    onSuccess: (_, trashFiles) => {
-      log('ok', trashFiles ? 'folder deleted; its files are in the trash' : 'folder deleted; its files were kept')
-      refresh()
-      onDeleted(folder!.parent_id)
-    },
-    onError: fail,
-  })
-
-  const submit = (run: () => void) => (e: FormEvent) => {
-    e.preventDefault()
-    if (name.trim()) run()
-  }
-
-  // Files in this folder and in everything below it.
-  const filesInside = folder ? tree.flat.filter((f) => isInside(tree, f.id, folder.id)).reduce((n, f) => n + f.count, 0) : 0
-  const foldersInside = folder ? tree.flat.filter((f) => f.id !== folder.id && isInside(tree, f.id, folder.id)).length : 0
-
-  return (
-    <div className="panel px flex flex-wrap items-center gap-x-3 gap-y-3 px-3 py-2">
-      {(panel === 'new' || panel === 'rename') && (
-        <form className="flex min-w-0 flex-1 flex-wrap items-center gap-3" onSubmit={submit(() => (panel === 'new' ? create.mutate() : rename.mutate()))}>
-          <span className="dim shrink-0">&gt; {panel === 'new' ? `new folder${folder ? ` in ${folder.name}` : ''}:` : 'new name:'}</span>
-          <input
-            className="field min-w-[160px] max-w-[340px] flex-1"
-            autoFocus
-            value={name}
-            maxLength={60}
-            aria-label="folder name"
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && onClose()}
-          />
-          <button type="submit" className="btn btn-sm btn-accent" disabled={!name.trim() || create.isPending || rename.isPending}>
-            {panel === 'new' ? 'create' : 'rename'}
-          </button>
-          <button type="button" className="btn btn-sm" onClick={onClose}>
-            cancel
-          </button>
-        </form>
-      )}
-
-      {panel === 'move' && folder && (
-        <>
-          <span className="dim shrink-0">&gt; move "{folder.name}" into:</span>
-          <select className="field !w-auto max-w-[340px]" value={dest} aria-label="destination" onChange={(e) => setDest(e.target.value)}>
-            <option value="top">top level</option>
-            {/* A folder cannot go into itself or into its own subfolders. */}
-            {tree.flat
-              .filter((f) => !isInside(tree, f.id, folder.id))
-              .map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.path}
-                </option>
-              ))}
-          </select>
-          <button type="button" className="btn btn-sm btn-accent" disabled={move.isPending || dest === (folder.parent_id ?? 'top')} onClick={() => move.mutate()}>
-            move
-          </button>
-          <button type="button" className="btn btn-sm" onClick={onClose}>
-            cancel
-          </button>
-        </>
-      )}
-
-      {panel === 'delete' && folder && (
-        <>
-          <span className="shrink-0">
-            &gt; delete "{folder.name}"{foldersInside > 0 ? ` and its ${foldersInside} subfolder${foldersInside === 1 ? '' : 's'}` : ''}?
-            {filesInside > 0 ? ` what about the ${filesInside} file${filesInside === 1 ? '' : 's'} inside?` : ''}
-          </span>
-          {filesInside > 0 ? (
-            <>
-              <button type="button" className="btn btn-sm" disabled={remove.isPending} onClick={() => remove.mutate(false)}>
-                keep files (move up)
-              </button>
-              <button type="button" className="btn btn-sm btn-danger" disabled={remove.isPending} onClick={() => remove.mutate(true)}>
-                files to trash
-              </button>
-            </>
-          ) : (
-            <button type="button" className="btn btn-sm btn-danger" disabled={remove.isPending} onClick={() => remove.mutate(false)}>
-              delete
-            </button>
-          )}
-          <button type="button" className="btn btn-sm" onClick={onClose}>
-            cancel
-          </button>
-        </>
-      )}
-    </div>
   )
 }

@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Item, ItemKind } from '../api'
 import { covers, DAYS, daysBetween, hhmm, iso, minutesOf, monthGrid, MONTHS, parse, plusDays, short, today, weekday, type Occurrence } from '../lib/days'
 import { openItem, titleOf, useItemChanges } from '../lib/items'
 import { openAt, pendingMove } from '../lib/repeats'
+import { useOccurrenceMenu } from './Menus'
 
 // The calendar's views. All of them get the appearances (Occurrence) of the
 // items in range and say what the person did: open one, move one, make one.
@@ -28,10 +29,12 @@ interface ViewProps {
   onDraft: (d: Draft) => void
 }
 
+type OnMenu = (e: ReactMouseEvent, o: Occurrence) => void
+
 const colorStyle = (it: Item): CSSProperties => (it.color ? ({ '--chip': `var(--c${it.color})` } as CSSProperties) : {})
 
 /** One appearance, as a chip: colour, a box to tick for a task, the title. */
-function Chip({ o, showTime = true, onPointerDown }: { o: Occurrence; showTime?: boolean; onPointerDown?: (e: ReactPointerEvent) => void }) {
+function Chip({ o, showTime = true, onPointerDown, onMenu }: { o: Occurrence; showTime?: boolean; onPointerDown?: (e: ReactPointerEvent) => void; onMenu?: OnMenu }) {
   const { update } = useItemChanges()
   const it = o.item
   const done = it.status === 'done'
@@ -39,6 +42,7 @@ function Chip({ o, showTime = true, onPointerDown }: { o: Occurrence; showTime?:
   return (
     <div
       className="cal-chip"
+      onContextMenu={onMenu && ((e) => onMenu(e, o))}
       data-kind={it.kind}
       data-done={done || undefined}
       data-status={it.status ?? undefined}
@@ -201,6 +205,7 @@ export function TimeGrid({ days, occ, onDraft }: ViewProps & { days: string[] })
   const scroller = useRef<HTMLDivElement>(null)
   const now = useNow()
   const drop = useDropChange()
+  const occMenu = useOccurrenceMenu()
   const { drag, start } = useDragItems(drop)
   const [making, setMaking] = useState<{ date: string; from: number; to: number; x: number; y: number } | null>(null)
 
@@ -265,7 +270,7 @@ export function TimeGrid({ days, occ, onDraft }: ViewProps & { days: string[] })
             onClick={(e) => e.target === e.currentTarget && onDraft({ date: d, time: null, minutes: null, x: e.clientX, y: e.clientY })}
           >
             {allDay(d).map((o) => (
-              <Chip key={o.key} o={o} onPointerDown={start(o, 'move')} />
+              <Chip key={o.key} o={o} onPointerDown={start(o, 'move')} onMenu={occMenu} />
             ))}
           </div>
         ))}
@@ -282,7 +287,7 @@ export function TimeGrid({ days, occ, onDraft }: ViewProps & { days: string[] })
           {days.map((d) => (
             <div key={d} className="tg-col" data-day={d} data-today={d === today() || undefined} onPointerDown={press(d)}>
               {timed(d).map((p) => (
-                <Block key={p.o.key} p={p} onMove={start(p.o, 'move')} onResize={start(p.o, 'resize')} />
+                <Block key={p.o.key} p={p} onMove={start(p.o, 'move')} onResize={start(p.o, 'resize')} onMenu={occMenu} />
               ))}
               {drag?.moved && drag.date === d && drag.o.item.time && (
                 <div className="tg-block tg-ghost" style={{ top: (drag.start / 60) * HOUR, height: (drag.minutes / 60) * HOUR, left: 2, right: 2, ...colorStyle(drag.o.item) }}>
@@ -308,13 +313,14 @@ export function TimeGrid({ days, occ, onDraft }: ViewProps & { days: string[] })
   )
 }
 
-function Block({ p, onMove, onResize }: { p: Placed; onMove: (e: ReactPointerEvent) => void; onResize: (e: ReactPointerEvent) => void }) {
+function Block({ p, onMove, onResize, onMenu }: { p: Placed; onMove: (e: ReactPointerEvent) => void; onResize: (e: ReactPointerEvent) => void; onMenu: OnMenu }) {
   const it = p.o.item
   const height = Math.max(((p.end - p.start) / 60) * HOUR, 18)
   const { update } = useItemChanges()
   return (
     <div
       className="tg-block"
+      onContextMenu={(e) => onMenu(e, p.o)}
       data-kind={it.kind}
       data-done={it.status === 'done' || undefined}
       data-status={it.status ?? undefined}
@@ -378,6 +384,7 @@ export function MonthGrid({
 }: ViewProps & { year: number; month: number; onDay: (day: string) => void; compact?: boolean }) {
   const days = useMemo(() => monthGrid(year, month).map(iso), [year, month])
   const drop = useDropChange()
+  const occMenu = useOccurrenceMenu()
   const { drag, start } = useDragItems(drop)
   const max = compact ? 2 : 4
   const t = today()
@@ -409,7 +416,7 @@ export function MonthGrid({
                 {parse(day).getDate()}
               </button>
               {here.slice(0, max).map((o) => (
-                <Chip key={o.key} o={o} showTime={!compact} onPointerDown={start(o, 'move')} />
+                <Chip key={o.key} o={o} showTime={!compact} onPointerDown={start(o, 'move')} onMenu={occMenu} />
               ))}
               {here.length > max && (
                 <button type="button" className="mg-more" onClick={() => onDay(day)}>

@@ -12,6 +12,8 @@ import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/t
 import { uploadFiles, uploads } from '../lib/uploads'
 import { Boot, LogLines, Palette, UploadTray, type Command } from './Overlays'
 import { ItemDrawer } from './ItemPanel'
+import { Menus } from './Menus'
+import { folderEntries, openMenu } from '../lib/menu'
 import { Compass, Room } from './Room'
 import { BmoFace, Cube, Twist, type Mood } from './sprites'
 import { turnTo } from '../lib/room'
@@ -179,6 +181,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
       </Room>
 
       {me.member && <ItemDrawer />}
+      {me.member && <Menus />}
       <StatusBar email={me.user.email} member={me.member} />
       <LogLines />
       <UploadTray />
@@ -267,10 +270,16 @@ interface TreeProps {
 
 function TreeRow({ node, current, open, toggle, refresh }: TreeProps) {
   const drop = useAssetDrop(node.id, node.name, refresh)
+  const navigate = useNavigate()
   const isOpen = open.has(node.id)
   return (
     <>
-      <div className={`nav-item ${drop.over ? 'drop-over' : ''}`} aria-current={current === node.id ? 'page' : undefined} {...drop.handlers}>
+      <div
+        className={`nav-item ${drop.over ? 'drop-over' : ''}`}
+        aria-current={current === node.id ? 'page' : undefined}
+        {...drop.handlers}
+        onContextMenu={(e) => openMenu(e, folderEntries(node.id, [{ label: 'open', run: () => navigate(`/?folder=${node.id}`) }, 'sep']))}
+      >
         <span className="shrink-0" style={{ width: node.depth * 12 }} />
         {node.children.length > 0 ? (
           <button type="button" className="twist" aria-expanded={isOpen} aria-label={`${isOpen ? 'close' : 'open'} ${node.name}`} onClick={() => toggle(node.id)}>

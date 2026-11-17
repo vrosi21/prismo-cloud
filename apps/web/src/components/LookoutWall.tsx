@@ -13,6 +13,8 @@ import { Boundary } from './Boundary'
 import { BundlePrompt } from './BundlePrompt'
 import { FolderPick } from './FolderPick'
 import { LookoutTree } from './LookoutTree'
+import { useItemEntries } from './Menus'
+import { openMenu } from '../lib/menu'
 import { Pinned } from './Pinned'
 import { Cube } from './sprites'
 
@@ -50,6 +52,7 @@ export function LookoutWall() {
     }
   }
   const qc = useQueryClient()
+  const itemEntries = useItemEntries()
   const [importing, setImporting] = useState<string | null>(null)
   const [asking, setAsking] = useState(false)
   const runImport = async (file: File) => {
@@ -116,7 +119,14 @@ export function LookoutWall() {
             {list.length === 0 && <p className="dim">&gt; nothing matches.</p>}
             {list.map((it) => (
               <li key={it.id}>
-                <button type="button" className="lookout-row" aria-current={open === it.id || undefined} onClick={() => lookout.set(it.id)} data-nav-item>
+                <button
+                  type="button"
+                  className="lookout-row"
+                  aria-current={open === it.id || undefined}
+                  onClick={() => lookout.set(it.id)}
+                  onContextMenu={(e) => openMenu(e, itemEntries(it))}
+                  data-nav-item
+                >
                   <span className="kind-tag" data-kind={it.kind}>
                     {it.kind}
                   </span>

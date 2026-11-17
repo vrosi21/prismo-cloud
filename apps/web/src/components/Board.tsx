@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { Canvas, CanvasEdge, CanvasNode, Item, Side } from '../api'
 import { nextOf, over, relDay } from '../lib/days'
 import { COLORS, openAnywhere, openItem, STATUSES, titleOf, useItemChanges, useItems } from '../lib/items'
 import { miniMarkdown, plainExcerpt } from '../lib/minimd'
 import { log } from '../lib/log'
+import { openMenu } from '../lib/menu'
+import { useItemEntries } from './Menus'
 
 // A board: an endless canvas of notes, cards, frames and arrows, like Miro,
 // stored as JSON Canvas 1.0 (jsoncanvas.org) so it opens in other canvas
@@ -118,6 +120,7 @@ export default function Board({ canvas, onChange, board }: Props) {
     }
   }
   const { create, update } = useItemChanges()
+  const itemEntries = useItemEntries()
 
   // Undo and redo: whole canvases, the last hundred.
   const past = useRef<Canvas[]>([])
@@ -681,6 +684,7 @@ export default function Board({ canvas, onChange, board }: Props) {
                 } else if (n.type === 'text' && edit) setEditing(n.id)
               }}
               onHover={itemIdOf(n) ? (on) => setHover(on ? n.id : null) : undefined}
+              onMenu={itemIdOf(n) ? (e) => cardMenu(e, n) : undefined}
             >
               {n.type === 'text' ? (
                 editing === n.id ? (
@@ -725,6 +729,27 @@ export default function Board({ canvas, onChange, board }: Props) {
     </div>
   )
 
+  // A card's right-click menu: the item's own entries, its colour, and
+  // taking the card off this board (the item stays).
+  function cardMenu(e: ReactMouseEvent, n: CanvasNode) {
+    const it = items.get(itemIdOf(n)!)
+    if (!it) return
+    setSel(new Set([n.id]))
+    openMenu(e, [
+      ...itemEntries(it),
+      'sep',
+      { heading: 'colour' },
+      {
+        swatches: (c) => {
+          update.mutate({ id: it.id, change: { color: c } })
+          if (n.color) patchNodes(new Set([n.id]), { color: undefined })
+        },
+        current: it.color,
+      },
+      { label: 'off the board', run: () => commit({ nodes: canvas.nodes.filter((m) => m.id !== n.id), edges: canvas.edges.filter((x) => x.fromNode !== n.id && x.toNode !== n.id) }) },
+    ])
+  }
+
   function startConnect(n: CanvasNode) {
     return (side: Side) => (e: ReactPointerEvent) => {
       e.stopPropagation()
@@ -754,6 +779,7 @@ function NodeBox({
   onResize,
   onDoubleClick,
   onHover,
+  onMenu,
   children,
 }: {
   n: CanvasNode
@@ -768,6 +794,7 @@ function NodeBox({
   onResize: (e: ReactPointerEvent) => void
   onDoubleClick?: () => void
   onHover?: (on: boolean) => void
+  onMenu?: (e: ReactMouseEvent) => void
   children: ReactNode
 }) {
   return (
@@ -784,6 +811,7 @@ function NodeBox({
         e.stopPropagation()
         onDoubleClick?.()
       }}
+      onContextMenu={onMenu}
       onPointerEnter={onHover && (() => onHover(true))}
       onPointerLeave={onHover && (() => onHover(false))}
     >
