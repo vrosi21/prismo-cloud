@@ -238,18 +238,20 @@ ci)
 	fi
 	tag="prismo-api:${BASH_REMATCH[1]}"
 	echo "==> deploying $tag"
-	"$self" backup
+	# Standard input carries the image: nothing before `load` may read from it
+	# (`docker compose exec` in backup would swallow its first bytes).
+	"$self" backup </dev/null
 	# The image running now stays at hand: if the new one does not come up, it goes back.
 	docker image inspect prismo-api:live >/dev/null 2>&1 && docker tag prismo-api:live prismo-api:previous
 	"$self" load "$tag"
-	if "$self" up; then
+	if "$self" up </dev/null; then
 		echo "==> $tag is live"
 		exit 0
 	fi
 	if docker image inspect prismo-api:previous >/dev/null 2>&1; then
 		echo "==> $tag did not come up; going back to the previous image" >&2
 		docker tag prismo-api:previous prismo-api:live
-		"$self" up >&2 || true
+		"$self" up </dev/null >&2 || true
 	fi
 	exit 1
 	;;
