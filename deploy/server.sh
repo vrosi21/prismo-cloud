@@ -15,6 +15,10 @@
 
 set -euo pipefail
 
+# This script's own full path, taken before the cd below: run as
+# "prismo-cloud/bin/prismo" from ssh, $0 is relative and would point nowhere.
+self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
 home="${PRISMO_HOME:-$HOME/prismo-cloud}"
 cd "$home"
 
@@ -136,7 +140,7 @@ up)
 		if healthy; then
 			echo "    the API answers"
 			# Running is not the same as reachable: see "the front door" above.
-			[[ -z "$(setting ORIGIN_URL)" ]] || "$0" front
+			[[ -z "$(setting ORIGIN_URL)" ]] || "$self" front
 			exit 0
 		fi
 		sleep 3
@@ -219,7 +223,7 @@ backup)
 	;;
 
 *)
-	sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,14p' "$self" | sed 's/^# \{0,1\}//'
 	exit 1
 	;;
 esac
