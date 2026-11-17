@@ -7,6 +7,7 @@ import { facing, WALLS } from '../lib/room'
 import { typing } from '../lib/spatial'
 import { useStore } from '../lib/store'
 import { MonthGrid, QuickCreate, TimeGrid, type Draft } from './CalendarViews'
+import { MoveChoice } from './Appearance'
 import { KeyCap } from './KeyCap'
 
 // The time wall: a calendar the way Google's works, and a task list beside
@@ -144,6 +145,7 @@ export function TimeWall() {
         <Categories inRange={all} />
         <TaskList items={items} anchor={anchor} />
       </aside>
+      <MoveChoice />
 
       <div className="time-main panel px">
         <div className="time-bar">

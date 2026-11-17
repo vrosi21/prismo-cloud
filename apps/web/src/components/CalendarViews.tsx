@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import type { Item, ItemKind } from '../api'
 import { covers, DAYS, daysBetween, hhmm, iso, minutesOf, monthGrid, MONTHS, parse, plusDays, short, today, weekday, type Occurrence } from '../lib/days'
 import { openItem, titleOf, useItemChanges } from '../lib/items'
+import { openAt, pendingMove } from '../lib/repeats'
 
 // The calendar's views. All of them get the appearances (Occurrence) of the
 // items in range and say what the person did: open one, move one, make one.
@@ -135,10 +136,16 @@ function useDropChange() {
   return (d: Drag) => {
     const it = d.o.item
     if (!d.moved) {
+      openAt.set({ id: it.id, orig: d.o.orig })
       openItem.set(it.id)
       return
     }
-    // A repeating item moves as a whole series, by as much as this one moved.
+    // A repeating one asks: only this one, this and later, or all of them.
+    if (it.repeat) {
+      const to = { date: d.date, time: it.time ? hhmm(d.start) : null, minutes: it.time ? d.minutes : null }
+      if (to.date !== d.o.date || to.time !== it.time || to.minutes !== it.minutes) pendingMove.set({ item: it, orig: d.o.orig, to })
+      return
+    }
     const shift = daysBetween(d.o.date, d.date)
     const change: Parameters<typeof update.mutate>[0]['change'] = {}
     if (shift && it.date) {

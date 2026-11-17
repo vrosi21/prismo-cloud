@@ -89,6 +89,8 @@ export interface Item {
   color: number | null
   /** Categories: "dsai" is one, "course:mai3" a facet inside it. */
   tags: string[]
+  /** One appearance of a repeat changed: by the day it would have had. */
+  exceptions: Record<string, Exception>
   /** Counts changes to the body or canvas. */
   version: number
   created_at: string
@@ -96,6 +98,15 @@ export interface Item {
   deleted_at: string | null
   /** Only when one item is read: what it links to ("to") and what links to it ("from"). */
   links?: ItemRef[]
+}
+
+/** One appearance of a repeat moved, named or skipped; what is left out stays as the series has it. */
+export interface Exception {
+  date?: string
+  time?: string
+  minutes?: number
+  title?: string
+  skip?: boolean
 }
 
 export interface ItemRef {
@@ -122,6 +133,7 @@ export type ItemChange = Partial<{
   repeat_until: string | null
   color: number | null
   tags: string[]
+  exceptions: Record<string, Exception>
   trashed: boolean
   /** The version read; a body or canvas change is refused if it moved on. */
   version: number

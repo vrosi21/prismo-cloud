@@ -30,6 +30,7 @@ export function itemRoutes({ uuid, body, collections }) {
       repeat_until: null,
       color: null,
       tags: [],
+      exceptions: {},
       version: 1,
       created_at: now(),
       updated_at: now(),
@@ -45,6 +46,7 @@ export function itemRoutes({ uuid, body, collections }) {
   // What follows from what, then is it valid. Mirrors itemRequest.apply.
   function settle(it, req) {
     if (!it.repeat && req.repeat_until) return 'an end of the repeat needs a repeat'
+    if (!it.repeat && req.exceptions && Object.keys(req.exceptions).length) return 'changing one of a repeat needs a repeat'
     if (it.date === null && (req.time || req.end_date || req.repeat)) return 'a time, a last day or a repeat needs a day'
     if (it.time === null && req.minutes) return 'a length needs a time'
     if (it.kind === 'task' && !it.status) it.status = 'todo'
@@ -53,23 +55,31 @@ export function itemRoutes({ uuid, body, collections }) {
     if (it.kind !== 'board') it.canvas = undefined
     if (!it.date) Object.assign(it, { time: null, end_date: null, repeat: null })
     if (!it.time) it.minutes = null
-    if (!it.repeat) it.repeat_until = null
+    if (!it.repeat) Object.assign(it, { repeat_until: null, exceptions: {} })
     if (req.tags) it.tags = [...new Set(req.tags.map((t) => t.trim().toLowerCase()).filter(Boolean))]
     if (it.end_date && it.end_date === it.date) it.end_date = null
     if (it.status === 'done' && it.repeat && it.date) {
-      const d = new Date(`${it.date}T12:00:00`)
-      const from = new Date(d)
-      if (it.repeat === 'daily') d.setDate(d.getDate() + 1)
-      if (it.repeat === 'weekly') d.setDate(d.getDate() + 7)
-      if (it.repeat === 'monthly') d.setMonth(d.getMonth() + 1)
-      if (it.repeat === 'yearly') d.setFullYear(d.getFullYear() + 1)
-      const shift = Math.round((d - from) / 86_400_000)
       const iso = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+      const from = new Date(`${it.date}T12:00:00`)
+      const today = iso(new Date())
+      // The n-th step, on to the first day not past (a late tick skips what went by).
+      let d = from
+      for (let n = 1; n < 40000; n++) {
+        d = new Date(from)
+        if (it.repeat === 'daily') d.setDate(d.getDate() + n)
+        if (it.repeat === 'weekly') d.setDate(d.getDate() + 7 * n)
+        if (it.repeat === 'monthly') d.setMonth(d.getMonth() + n)
+        if (it.repeat === 'yearly') d.setFullYear(d.getFullYear() + n)
+        if ((it.repeat === 'monthly' || it.repeat === 'yearly') && d.getDate() !== from.getDate()) continue
+        if (iso(d) >= today) break
+      }
+      const shift = Math.round((d - from) / 86_400_000)
       if (it.repeat_until && iso(d) > it.repeat_until) {
         it.done_at = it.done_at ?? now()
         return ''
       }
       it.date = iso(d)
+      it.exceptions = Object.fromEntries(Object.entries(it.exceptions ?? {}).filter(([k]) => k >= it.date))
       if (it.end_date) {
         const e = new Date(`${it.end_date}T12:00:00`)
         e.setDate(e.getDate() + shift)

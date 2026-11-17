@@ -262,6 +262,27 @@ screen switching camera feeds: no swing, at most a moment of static.
   board). The library's trash lists tasks and events too; before, a
   trashed task could not be got back. Checked in the mock.
 
+- Step 16 (2026-11-17, the user's list after trying the boards: view-only
+  boards by default, the DSAI board as a tree, colours with a legend, pins
+  on a quick-view board, a folder tree with subfolders on the lookout,
+  different colours for notebook and board tags, and Google-style changes
+  to one appearance of a repeat; the DSAI facts: RF lab 2 + lab 1 defense
+  on 18 Nov, LUGD lab 4 on 19 Nov, RL lab 2 defense on 20 Nov, a project
+  for every course but MAI3, 2 more LUGD tests). Migration 0011:
+  `items.exceptions` (jsonb, by original day: date, time, minutes, title,
+  skip; only with a repeat). A late tick of a repeating task goes on to
+  the first day not past and drops older exceptions. Web: `lib/repeats.ts`
+  (only this one = exception; this and later = the earlier ones become a
+  copy ending the day before, the item carries on; all = shift),
+  `nextOf` in `lib/days.ts` for cards and pins, `components/Appearance.tsx`
+  (the calendar's choice after a drag, the panel's "this one" row),
+  `lib/pins.ts` (`pin:<section>` tags, kept out of calendar filters),
+  `Pinned.tsx`, `LookoutTree.tsx`; boards open in view mode ("edit" per
+  board in localStorage), same-side arrows draw as tight brackets. The DSAI
+  bundle is regenerated as a tree with pins and per-lab titles. Smoke test
+  194/194 with 0010 and 0011. Checked in the mock; the browser pane was
+  hidden, so the tree layout was checked from a drawing of the bundle.
+
 ## Ideas for next time
 
 - **Mail on the wishes wall** (the user's plan, 2026-11-16): a mail

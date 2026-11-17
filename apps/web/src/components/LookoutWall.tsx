@@ -11,7 +11,9 @@ import { useStore } from '../lib/store'
 import { ConflictBar, Notes, SaveNote } from './ItemPanel'
 import { Boundary } from './Boundary'
 import { FolderPick } from './FolderPick'
-import { Cube, Prismo } from './sprites'
+import { LookoutTree } from './LookoutTree'
+import { Pinned } from './Pinned'
+import { Cube } from './sprites'
 
 const Board = lazy(() => import('./Board'))
 
@@ -95,31 +97,39 @@ export function LookoutWall() {
           <span className="label">new ones &amp; imports go in</span>
           <FolderPick value={into} onPick={(id) => pickFolder(id ?? '')} />
         </div>
+        <button type="button" className="lookout-row" aria-current={open === null || undefined} onClick={() => lookout.set(null)} data-nav-item>
+          <span className="kind-tag" data-kind="pinned">
+            pinned
+          </span>
+          <span className="min-w-0 flex-1 truncate">the pinned board</span>
+        </button>
         <input className="field" placeholder="find in titles and text" value={q} onChange={(e) => setQ(e.target.value)} aria-label="find" />
-        <ul className="lookout-list">
-          {isPending && <Cube size={32} label="loading" />}
-          {!isPending && list.length === 0 && <p className="dim">&gt; {q ? 'nothing matches.' : 'none yet. make one above.'}</p>}
-          {list.map((it) => (
-            <li key={it.id}>
-              <button type="button" className="lookout-row" aria-current={open === it.id || undefined} onClick={() => lookout.set(it.id)} data-nav-item>
-                <span className="kind-tag">{it.kind}</span>
-                <span className="min-w-0 flex-1 truncate">{titleOf(it)}</span>
-                <span className="dim shrink-0 text-[16px]">{when(it.updated_at)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        {isPending && <Cube size={32} label="loading" />}
+        {!isPending && q.trim() ? (
+          <ul className="lookout-list">
+            {list.length === 0 && <p className="dim">&gt; nothing matches.</p>}
+            {list.map((it) => (
+              <li key={it.id}>
+                <button type="button" className="lookout-row" aria-current={open === it.id || undefined} onClick={() => lookout.set(it.id)} data-nav-item>
+                  <span className="kind-tag" data-kind={it.kind}>
+                    {it.kind}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{titleOf(it)}</span>
+                  <span className="dim shrink-0 text-[16px]">{when(it.updated_at)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          !isPending && <LookoutTree items={list} open={open} target={into} onTarget={(id) => pickFolder(id ?? '')} when={when} />
+        )}
       </aside>
 
       <div className="lookout-main">
         {open ? (
           <Page key={open} id={open} />
         ) : (
-          <div className="panel px-raised lookout-empty">
-            <Prismo />
-            <p>&gt; pick a notebook or a board, or make a new one.</p>
-            <p className="dim">notebooks take markdown and latex ($x^2$), and type like a normal editor. boards are endless canvases of notes, cards and arrows.</p>
-          </div>
+          <Pinned />
         )}
       </div>
     </section>
@@ -180,7 +190,9 @@ function PageHead({ item }: { item: Item }) {
         onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
       />
       <div className="flex flex-wrap items-center gap-3">
-        <span className="kind-tag">{item.kind}</span>
+        <span className="kind-tag" data-kind={item.kind}>
+          {item.kind}
+        </span>
         <span className="dim">in</span>
         <span title={cards ? `its ${cards} cards in the same folder move along` : undefined}>
           <FolderPick value={item.collection_id} onPick={(to) => to !== item.collection_id && void whole.move(item, to)} className="!w-auto max-w-[260px]" />

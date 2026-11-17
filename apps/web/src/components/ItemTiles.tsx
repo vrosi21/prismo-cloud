@@ -35,7 +35,7 @@ export function ItemTiles({ folderId, q, trashed, hidden }: { folderId?: string;
           <div key={it.id} className="item-tile" style={it.color ? ({ '--tile': `var(--c${it.color})` } as CSSProperties) : undefined}>
             <button type="button" className="flex min-w-0 flex-col gap-1 text-left" data-nav-item onClick={() => !trashed && openOnLookout(it.id)} disabled={trashed}>
               <span className="flex items-center gap-2">
-                <span className="kind-tag">{it.kind}</span>
+                <span className="kind-tag" data-kind={it.kind}>{it.kind}</span>
                 <span className="truncate">{titleOf(it)}</span>
               </span>
               {it.excerpt && <span className="item-tile-text">{plainExcerpt(it.excerpt, 90)}</span>}

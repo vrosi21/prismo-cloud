@@ -1,9 +1,12 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, type Item, type ItemChange, type ItemKind, type Repeat } from '../api'
 import { hhmm, length, minutesOf, plusDays, today } from '../lib/days'
 import { COLORS, KINDS, openAnywhere, openItem, openOnLookout, STATUSES, titleOf, useItem, useItemChanges, useItems, useWholeItem } from '../lib/items'
 import { errorText, log } from '../lib/log'
+import { pinOf, sectionsOf, withPin } from '../lib/pins'
+import { openAt } from '../lib/repeats'
+import { ThisOne } from './Appearance'
 import { FolderPick } from './FolderPick'
 import { useContentSaver } from '../lib/saver'
 import { useStore } from '../lib/store'
@@ -25,6 +28,7 @@ const REPEATS: { id: Repeat | ''; label: string }[] = [
 export function ItemDrawer() {
   const id = useStore(openItem)
   useEffect(() => {
+    if (!id) openAt.set(null)
     if (!id) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !(e.target instanceof HTMLElement && e.target.closest('.nb-ask, .nb-slash'))) openItem.set(null)
@@ -232,6 +236,7 @@ export function ItemForm({ item, onClose, full = false }: { item: Item; onClose?
               )}
             </div>
           </Row>
+          {item.repeat && <ThisOne item={item} />}
         </>
       )}
 
@@ -249,6 +254,7 @@ export function ItemForm({ item, onClose, full = false }: { item: Item; onClose?
       </Row>
 
       <Tags item={item} onSave={(tags) => set({ tags })} />
+      <Pin item={item} onSave={(tags) => set({ tags })} />
 
       <Row label="folder">
         <FolderPick value={item.collection_id} onPick={(to) => to !== item.collection_id && void whole.move(item, to)} className="!w-auto max-w-full" />
@@ -381,7 +387,7 @@ function Links({ item }: { item: Item }) {
         {links.length === 0 && !adding && <span className="dim">nothing yet</span>}
         {links.map((l) => (
           <div key={l.id} className="flex items-center gap-2">
-            <span className="kind-tag">{l.kind}</span>
+            <span className="kind-tag" data-kind={l.kind}>{l.kind}</span>
             <button type="button" className="link-btn min-w-0 flex-1 truncate text-left" onClick={() => openAnywhere(l)}>
               {titleOf(l)}
             </button>
@@ -398,7 +404,7 @@ function Links({ item }: { item: Item }) {
               .slice(0, 8)
               .map((f) => (
                 <button key={f.id} type="button" className="link-btn text-left" onClick={() => link(f.id)}>
-                  <span className="kind-tag">{f.kind}</span> {titleOf(f)}
+                  <span className="kind-tag" data-kind={f.kind}>{f.kind}</span> {titleOf(f)}
                 </button>
               ))}
           </div>
@@ -417,12 +423,13 @@ function Links({ item }: { item: Item }) {
  * inside it. The calendar's category list is made from these.
  */
 function Tags({ item, onSave }: { item: Item; onSave: (tags: string[]) => void }) {
-  const tags = item.tags ?? [] // a server from before tags sends none
+  // The pin has its own row; a server from before tags sends none.
+  const tags = (item.tags ?? []).filter((t) => !t.startsWith('pin:'))
   const [text, setText] = useState(tags.join(', '))
   useEffect(() => setText(tags.join(', ')), [tags.join()]) // eslint-disable-line react-hooks/exhaustive-deps
   const save = () => {
-    const next = [...new Set(text.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean))]
-    if (next.join(',') !== tags.join(',')) onSave(next)
+    const next = [...new Set(text.split(',').map((t) => t.trim().toLowerCase()).filter((t) => t && !t.startsWith('pin:')))]
+    if (next.join(',') !== tags.join(',')) onSave(withPin(next, pinOf(item)))
   }
   return (
     <Row label="tags">
@@ -435,6 +442,48 @@ function Tags({ item, onSave }: { item: Item; onSave: (tags: string[]) => void }
         onBlur={save}
         onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
       />
+    </Row>
+  )
+}
+
+/** Which section of the pinned board the item is on, if any. */
+function Pin({ item, onSave }: { item: Item; onSave: (tags: string[]) => void }) {
+  const { data: all = [] } = useItems({})
+  const sections = useMemo(() => sectionsOf(all), [all])
+  const current = pinOf(item)
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState('')
+  const pin = (section: string | null) => onSave(withPin(item.tags ?? [], section))
+  return (
+    <Row label="pinned">
+      <div className="flex flex-wrap items-center gap-2">
+        {[...new Set([...sections, ...(current ? [current] : [])])].map((s) => (
+          <button key={s} type="button" className="chip" aria-pressed={current === s} onClick={() => pin(current === s ? null : s)} title={current === s ? 'unpin' : `pin under "${s}"`}>
+            {s}
+          </button>
+        ))}
+        {naming ? (
+          <input
+            className="field !w-[150px]"
+            autoFocus
+            value={name}
+            maxLength={30}
+            placeholder="section"
+            aria-label="new section"
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => {
+              if (name.trim()) pin(name)
+              setNaming(false)
+              setName('')
+            }}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === 'Escape') && (e.key === 'Escape' && setName(''), (e.currentTarget as HTMLInputElement).blur())}
+          />
+        ) : (
+          <button type="button" className="chip" onClick={() => setNaming(true)} title="pin it in a new section of the pinned board">
+            + section
+          </button>
+        )}
+      </div>
     </Row>
   )
 }

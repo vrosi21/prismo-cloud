@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { Canvas, CanvasEdge, CanvasNode, Item, Side } from '../api'
-import { short } from '../lib/days'
+import { nextOf, over, relDay } from '../lib/days'
 import { COLORS, openAnywhere, openItem, STATUSES, titleOf, useItemChanges, useItems } from '../lib/items'
 import { miniMarkdown, plainExcerpt } from '../lib/minimd'
 import { log } from '../lib/log'
@@ -12,12 +12,15 @@ import { log } from '../lib/log'
 // off on the calendar as well. Colours are the JSON Canvas presets "1".."6",
 // painted by the theme.
 //
+// A board opens to look at, not to change: nothing moves by accident.
+// Pressing a card selects it; a selected card can then be dragged. "edit"
+// turns on the rest (remembered per board):
 //   drag the empty board       move around (or scroll; ctrl+scroll zooms)
 //   shift+drag the empty board select an area
-//   double-click the board     a new note there
-//   drag a dot on a card's side to another card: an arrow
-//   delete                     removes what is selected (an item card only
-//                              leaves the board; the item stays)
+//   double-click the board     a new note there (edit)
+//   drag a dot on a card's side to another card: an arrow (edit)
+//   delete                     removes what is selected (edit; an item card
+//                              only leaves the board, the item stays)
 
 const GRID = 20
 const snap = (v: number) => Math.round(v / GRID) * GRID
@@ -58,7 +61,10 @@ function sidesBetween(a: CanvasNode, b: CanvasNode): [Side, Side] {
 const normal: Record<Side, Point> = { top: { x: 0, y: -1 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } }
 
 function curve(p: Point, ps: Side, q: Point, qs: Side): string {
-  const d = Math.max(40, Math.hypot(q.x - p.x, q.y - p.y) / 3)
+  // Side to the same side (left to left): a bracket, as in a tree, that
+  // stays close instead of swinging wider the further apart the two are.
+  const far = Math.hypot(q.x - p.x, q.y - p.y)
+  const d = ps === qs ? Math.min(50, Math.max(24, far / 4)) : Math.max(40, far / 3)
   const c1 = { x: p.x + normal[ps].x * d, y: p.y + normal[ps].y * d }
   const c2 = { x: q.x + normal[qs].x * d, y: q.y + normal[qs].y * d }
   return `M${p.x},${p.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${q.x},${q.y}`
@@ -92,6 +98,25 @@ export default function Board({ canvas, onChange, board }: Props) {
   const [gesture, setGesture] = useState<Gesture | null>(null)
   const [hover, setHover] = useState<string | null>(null)
   const [adding, setAdding] = useState<null | 'notebook'>(null)
+  const [legend, setLegend] = useState(false)
+  const editKey = `prismo.board.edit.${board.id}`
+  const [edit, setEditState] = useState(() => {
+    try {
+      return localStorage.getItem(editKey) === '1'
+    } catch {
+      return false
+    }
+  })
+  const setEdit = (on: boolean) => {
+    setEditState(on)
+    if (!on) setEditing(null)
+    try {
+      if (on) localStorage.setItem(editKey, '1')
+      else localStorage.removeItem(editKey)
+    } catch {
+      /* not remembered */
+    }
+  }
   const { create, update } = useItemChanges()
 
   // Undo and redo: whole canvases, the last hundred.
@@ -125,6 +150,15 @@ export default function Board({ canvas, onChange, board }: Props) {
   const itemIds = useMemo(() => canvas.nodes.map(itemIdOf).filter((x): x is string => Boolean(x)), [canvas.nodes])
   const { data: cardItems = [] } = useItems({ ids: itemIds }, itemIds.length > 0)
   const items = useMemo(() => new Map(cardItems.map((it) => [it.id, it])), [cardItems])
+  // A card takes its item's colour unless the board gave it one.
+  const colorOf = useCallback(
+    (n: CanvasNode) => {
+      const id = itemIdOf(n)
+      const c = id ? items.get(id)?.color : null
+      return n.color ?? (c ? String(c) : undefined)
+    },
+    [items],
+  )
 
   // Everything that has to happen before the card under the pointer.
   const upstream = useMemo(() => {
@@ -258,6 +292,8 @@ export default function Board({ canvas, onChange, board }: Props) {
       } else if (mod && e.key.toLowerCase() === 'a') {
         e.preventDefault()
         setSel(new Set(canvas.nodes.map((n) => n.id)))
+      } else if (!edit && (e.key === 'Delete' || e.key === 'Backspace' || e.key === 'n' || (mod && e.key.toLowerCase() === 'd'))) {
+        return
       } else if (mod && e.key.toLowerCase() === 'd' && sel.size > 0) {
         e.preventDefault()
         const copies = canvas.nodes.filter((n) => sel.has(n.id)).map((n) => ({ ...n, id: newId(), x: n.x + GRID * 2, y: n.y + GRID * 2 }))
@@ -271,7 +307,7 @@ export default function Board({ canvas, onChange, board }: Props) {
       } else if (e.key === 'Escape') {
         setSel(new Set())
         setSelEdge(null)
-      } else if (e.key === 'Enter' && sel.size === 1) {
+      } else if (e.key === 'Enter' && sel.size === 1 && edit) {
         const n = byId.get([...sel][0])
         if (n && (n.type === 'text' || n.type === 'group')) {
           e.preventDefault()
@@ -372,7 +408,7 @@ export default function Board({ canvas, onChange, board }: Props) {
     if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains('board-plane')) return
     const prev = lastPress.current
     lastPress.current = { t: e.timeStamp, x: e.clientX, y: e.clientY }
-    if (e.button === 0 && !e.shiftKey && e.timeStamp - prev.t < 400 && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 6) {
+    if (edit && e.button === 0 && !e.shiftKey && e.timeStamp - prev.t < 400 && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 6) {
       lastPress.current.t = 0
       // No mousedown after this, so focus stays in the new note's text box.
       e.preventDefault()
@@ -402,6 +438,12 @@ export default function Board({ canvas, onChange, board }: Props) {
       next = new Set([n.id])
     }
     setSel(next)
+    // Not editing, a press on a card that was not selected only selects it;
+    // dragging it moves the view, as on the empty board.
+    if (!edit && (!sel.has(n.id) || e.shiftKey)) {
+      setGesture({ kind: 'pan', sx: e.clientX, sy: e.clientY, view })
+      return
+    }
     // Moving a frame moves what is in it.
     const moving = new Set(next)
     for (const id of next) {
@@ -446,20 +488,36 @@ export default function Board({ canvas, onChange, board }: Props) {
   return (
     <div className="board-wrap">
       <div className="board-tools" role="toolbar" aria-label="board">
-        <button type="button" className="btn btn-sm" onClick={() => addNote()} title="note (n)">
-          + note
+        <button
+          type="button"
+          className={`btn btn-sm${edit ? ' btn-accent' : ''}`}
+          aria-pressed={edit}
+          onClick={() => setEdit(!edit)}
+          title={edit ? 'back to looking: nothing moves by accident' : 'add, connect, resize and delete things'}
+        >
+          {edit ? 'done editing' : 'edit'}
         </button>
-        <button type="button" className="btn btn-sm" onClick={() => add({ type: 'text', text: '', width: 260, height: 60 })}>
-          + text
-        </button>
-        <button type="button" className="btn btn-sm" onClick={newTask} disabled={create.isPending}>
-          + task
-        </button>
-        <button type="button" className="btn btn-sm" aria-pressed={adding === 'notebook'} onClick={() => setAdding(adding ? null : 'notebook')}>
-          + card for...
-        </button>
-        <button type="button" className="btn btn-sm" onClick={() => add({ type: 'group', label: 'frame', width: 640, height: 360 })}>
-          + frame
+        {edit && (
+          <>
+            <button type="button" className="btn btn-sm" onClick={() => addNote()} title="note (n)">
+              + note
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => add({ type: 'text', text: '', width: 260, height: 60 })}>
+              + text
+            </button>
+            <button type="button" className="btn btn-sm" onClick={newTask} disabled={create.isPending}>
+              + task
+            </button>
+            <button type="button" className="btn btn-sm" aria-pressed={adding === 'notebook'} onClick={() => setAdding(adding ? null : 'notebook')}>
+              + card for...
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => add({ type: 'group', label: 'frame', width: 640, height: 360 })}>
+              + frame
+            </button>
+          </>
+        )}
+        <button type="button" className="btn btn-sm" aria-pressed={legend} onClick={() => setLegend(!legend)} title="what the colours mean">
+          legend
         </button>
         <span className="flex-1" />
         <button type="button" className="btn btn-sm" onClick={undo} title="undo (ctrl+z)" aria-label="undo">
@@ -481,11 +539,15 @@ export default function Board({ canvas, onChange, board }: Props) {
         <button type="button" className="btn btn-sm" onClick={exportFile} title="download as a .canvas file (JSON Canvas)">
           .canvas
         </button>
-        <label className="btn btn-sm cursor-pointer" title="add the contents of a .canvas file">
-          open
-          <input type="file" accept=".canvas,application/json" hidden onChange={(e) => e.target.files?.[0] && void importFile(e.target.files[0])} />
-        </label>
+        {edit && (
+          <label className="btn btn-sm cursor-pointer" title="add the contents of a .canvas file">
+            open
+            <input type="file" accept=".canvas,application/json" hidden onChange={(e) => e.target.files?.[0] && void importFile(e.target.files[0])} />
+          </label>
+        )}
       </div>
+
+      {legend && <Legend nodes={canvas.nodes} items={items} colorOf={colorOf} onClose={() => setLegend(false)} />}
 
       {adding && (
         <CardPicker
@@ -501,7 +563,8 @@ export default function Board({ canvas, onChange, board }: Props) {
       {(selected.length > 0 || edge) && (
         <div className="board-sel panel px" role="toolbar" aria-label="selected">
           <span className="dim">{edge ? 'arrow' : selected.length === 1 ? selected[0].type === 'group' ? 'frame' : itemIdOf(selected[0]) ? 'card' : 'note' : `${selected.length} things`}</span>
-          <div className="flex gap-1">
+          {!edit && <span className="dim">· drag it to move it</span>}
+          {edit && <div className="flex gap-1">
             <button type="button" className="swatch" title="no colour" onClick={() => (edge ? patchEdge(edge.id, { color: undefined }) : patchNodes(sel, { color: undefined }))}>
               <span className="swatch-none" />
             </button>
@@ -517,8 +580,8 @@ export default function Board({ canvas, onChange, board }: Props) {
                 <span style={{ background: `var(--c${c.id})` }} />
               </button>
             ))}
-          </div>
-          {edge && (
+          </div>}
+          {edge && edit && (
             <>
               <input className="field !w-[160px]" placeholder="label" defaultValue={edge.label ?? ''} key={edge.id} onBlur={(e) => patchEdge(edge.id, { label: e.target.value || undefined })} />
               <button type="button" className="chip" aria-pressed={edge.toEnd !== 'none'} onClick={() => patchEdge(edge.id, { toEnd: edge.toEnd === 'none' ? 'arrow' : 'none' })}>
@@ -531,9 +594,11 @@ export default function Board({ canvas, onChange, board }: Props) {
               open
             </button>
           )}
-          <button type="button" className="btn btn-sm" onClick={removeSelected} title="delete">
-            {selected.some(itemIdOf) ? 'off the board' : 'delete'}
-          </button>
+          {edit && (
+            <button type="button" className="btn btn-sm" onClick={removeSelected} title="delete">
+              {selected.some(itemIdOf) ? 'off the board' : 'delete'}
+            </button>
+          )}
         </div>
       )}
 
@@ -546,8 +611,8 @@ export default function Board({ canvas, onChange, board }: Props) {
       >
         <div className="board-plane" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}>
           {groups.map((n) => (
-            <NodeBox key={n.id} n={n} selected={sel.has(n.id)} dim={Boolean(upstream)} onPress={pressNode(n)} onConnect={startConnect(n)} onResize={startResize(n)}>
-              <GroupLabel n={n} editing={editing === n.id} onEdit={() => setEditing(n.id)} onDone={(label) => (setEditing(null), patchNodes(new Set([n.id]), { label }))} />
+            <NodeBox key={n.id} n={n} edit={edit} selected={sel.has(n.id)} dim={Boolean(upstream)} onPress={pressNode(n)} onConnect={startConnect(n)} onResize={startResize(n)}>
+              <GroupLabel n={n} editing={editing === n.id} onEdit={() => edit && setEditing(n.id)} onDone={(label) => (setEditing(null), patchNodes(new Set([n.id]), { label }))} />
             </NodeBox>
           ))}
           <svg className="board-edges" aria-hidden>
@@ -571,6 +636,7 @@ export default function Board({ canvas, onChange, board }: Props) {
                     d={d}
                     className="board-edge-hit"
                     onPointerDown={(ev) => {
+                      if (!edit) return
                       ev.stopPropagation()
                       setSel(new Set())
                       setSelEdge(e.id)
@@ -599,6 +665,8 @@ export default function Board({ canvas, onChange, board }: Props) {
             <NodeBox
               key={n.id}
               n={n}
+              color={colorOf(n)}
+              edit={edit}
               selected={sel.has(n.id)}
               dim={Boolean(upstream && !upstream.has(n.id))}
               hot={Boolean(upstream?.has(n.id))}
@@ -610,7 +678,7 @@ export default function Board({ canvas, onChange, board }: Props) {
                 if (id) {
                   const it = items.get(id)
                   if (it) openAnywhere(it)
-                } else if (n.type === 'text') setEditing(n.id)
+                } else if (n.type === 'text' && edit) setEditing(n.id)
               }}
               onHover={itemIdOf(n) ? (on) => setHover(on ? n.id : null) : undefined}
             >
@@ -628,7 +696,7 @@ export default function Board({ canvas, onChange, board }: Props) {
                     onKeyDown={(e) => e.key === 'Escape' && (e.target as HTMLTextAreaElement).blur()}
                   />
                 ) : (
-                  <div className="board-text" dangerouslySetInnerHTML={{ __html: n.text ? miniMarkdown(n.text) : '<p class="dim">double-click to write</p>' }} />
+                  <div className="board-text" dangerouslySetInnerHTML={{ __html: n.text ? miniMarkdown(n.text) : `<p class="dim">${edit ? 'double-click to write' : ''}</p>` }} />
                 )
               ) : itemIdOf(n) ? (
                 <ItemCard it={items.get(itemIdOf(n)!)} onToggle={(it) => update.mutate({ id: it.id, change: { status: it.status === 'done' ? 'todo' : 'done' } })} />
@@ -651,7 +719,7 @@ export default function Board({ canvas, onChange, board }: Props) {
           )}
         </div>
         {canvas.nodes.length === 0 && (
-          <p className="board-empty dim">&gt; an empty board. double-click anywhere for a note, or use the buttons above.</p>
+          <p className="board-empty dim">&gt; an empty board. {edit ? 'double-click anywhere for a note, or use the buttons above.' : 'press "edit" to add things.'}</p>
         )}
       </div>
     </div>
@@ -676,6 +744,8 @@ export default function Board({ canvas, onChange, board }: Props) {
 
 function NodeBox({
   n,
+  color,
+  edit,
   selected,
   dim,
   hot,
@@ -687,6 +757,9 @@ function NodeBox({
   children,
 }: {
   n: CanvasNode
+  /** The colour to paint, when not the node's own (an item card takes its item's). */
+  color?: string
+  edit: boolean
   selected: boolean
   dim?: boolean
   hot?: boolean
@@ -705,7 +778,7 @@ function NodeBox({
       data-selected={selected || undefined}
       data-dim={dim || undefined}
       data-hot={hot || undefined}
-      style={{ left: n.x, top: n.y, width: n.width, height: n.height, ...(n.color ? { '--node': colorVar(n.color) } : {}) } as CSSProperties}
+      style={{ left: n.x, top: n.y, width: n.width, height: n.height, ...((color ?? n.color) ? { '--node': colorVar(color ?? n.color) } : {}) } as CSSProperties}
       onPointerDown={onPress}
       onDoubleClick={(e) => {
         e.stopPropagation()
@@ -715,10 +788,11 @@ function NodeBox({
       onPointerLeave={onHover && (() => onHover(false))}
     >
       {children}
-      {(['top', 'right', 'bottom', 'left'] as Side[]).map((s) => (
-        <span key={s} className={`board-dot board-dot-${s}`} onPointerDown={onConnect(s)} title="drag to another card for an arrow" />
-      ))}
-      {selected && <span className="board-resize" onPointerDown={onResize} aria-hidden />}
+      {edit &&
+        (['top', 'right', 'bottom', 'left'] as Side[]).map((s) => (
+          <span key={s} className={`board-dot board-dot-${s}`} onPointerDown={onConnect(s)} title="drag to another card for an arrow" />
+        ))}
+      {edit && selected && <span className="board-resize" onPointerDown={onResize} aria-hidden />}
     </div>
   )
 }
@@ -741,24 +815,43 @@ function GroupLabel({ n, editing, onEdit, onDone }: { n: CanvasNode; editing: bo
   )
 }
 
-/** A card for one of the owner's items: what it is, its status, its day, its first lines. */
+/**
+ * A card for one of the owner's items: what it is, its status, when it is
+ * next (a repeat shows its next appearance, with that one's own title), its
+ * first lines.
+ */
 function ItemCard({ it, onToggle }: { it: Item | undefined; onToggle: (it: Item) => void }) {
   if (!it) return <span className="dim">&gt; this item is gone (or in the trash).</span>
   const status = STATUSES.find((s) => s.id === it.status)
+  const next = nextOf(it)
+  const past = it.date !== null && (next === null || (!it.repeat && over(next)))
+  const own = next && next.item.title !== it.title ? next.item.title : null
   return (
-    <div className="board-card" data-status={it.status ?? undefined} data-kind={it.kind}>
+    <div className="board-card" data-status={it.status ?? undefined} data-kind={it.kind} data-past={past || undefined}>
       <div className="board-card-top">
-        <span className="kind-tag">{it.kind}</span>
+        <span className="kind-tag" data-kind={it.kind}>
+          {it.kind}
+        </span>
         {status && <span className="status-pill" data-status={status.id}>{status.label}</span>}
-        {it.date && <span className="dim">{short(it.date)}{it.time ? ` ${it.time}` : ''}{it.repeat ? ` · ${it.repeat}` : ''}</span>}
         {(it.tags ?? [])
           .filter((t) => t.startsWith('type:'))
           .map((t) => (
-            <span key={t} className="tag-chip">
+            <span key={t} className="tag-chip" style={it.color ? ({ '--chip': `var(--c${it.color})` } as CSSProperties) : undefined}>
               {t.slice(5)}
             </span>
           ))}
+        {next ? (
+          <span className="dim">
+            {it.repeat && !own ? 'next ' : ''}
+            {relDay(next.date)}
+            {next.item.time ? ` ${next.item.time}` : ''}
+            {it.repeat ? ` · ${it.repeat}` : ''}
+          </span>
+        ) : (
+          it.date && <span className="dim">{it.repeat ? 'repeat ended' : relDay(it.date)}</span>
+        )}
       </div>
+      {own && <b className="board-card-title">{own}</b>}
       <div className="flex items-start gap-2">
         {it.status && (
           <input
@@ -770,9 +863,48 @@ function ItemCard({ it, onToggle }: { it: Item | undefined; onToggle: (it: Item)
             onChange={() => onToggle(it)}
           />
         )}
-        <b className="board-card-title">{titleOf(it)}</b>
+        {own ? <span className="dim">{titleOf(it)}</span> : <b className="board-card-title">{titleOf(it)}</b>}
       </div>
       {it.excerpt && <p className="board-card-text">{plainExcerpt(it.excerpt)}</p>}
+    </div>
+  )
+}
+
+/**
+ * What the colours on this board mean, read off its cards: each colour with
+ * the types ("type:lab") of the items painted with it, else their kinds.
+ */
+function Legend({ nodes, items, colorOf, onClose }: { nodes: CanvasNode[]; items: Map<string, Item>; colorOf: (n: CanvasNode) => string | undefined; onClose: () => void }) {
+  const byColor = new Map<string, Map<string, number>>()
+  for (const n of nodes) {
+    const id = itemIdOf(n)
+    const it = id ? items.get(id) : undefined
+    const c = colorOf(n)
+    if (!it || !c) continue
+    const types = (it.tags ?? []).filter((t) => t.startsWith('type:')).map((t) => t.slice(5))
+    const names = byColor.get(c) ?? new Map<string, number>()
+    for (const t of types.length ? types : [it.kind]) names.set(t, (names.get(t) ?? 0) + 1)
+    byColor.set(c, names)
+  }
+  const rows = [...byColor].sort(([a], [b]) => a.localeCompare(b))
+  return (
+    <div className="board-legend panel px-raised" role="dialog" aria-label="legend">
+      {rows.length === 0 && <p className="dim">&gt; no coloured cards here.</p>}
+      {rows.map(([c, names]) => (
+        <div key={c} className="flex items-center gap-2">
+          <span className="board-legend-swatch" style={{ background: colorVar(c) }} />
+          <span>
+            {[...names]
+              .sort((a, b) => b[1] - a[1])
+              .map(([name, count]) => `${name} (${count})`)
+              .join(', ')}
+          </span>
+        </div>
+      ))}
+      <p className="dim">a card takes its item's colour (details &gt; colour) unless the board gives it one.</p>
+      <button type="button" className="btn btn-sm self-start" onClick={onClose}>
+        close
+      </button>
     </div>
   )
 }
@@ -791,7 +923,10 @@ function CardPicker({ onPick, onClose, exclude }: { onPick: (it: Item) => void; 
           .map((it) => (
             <li key={it.id}>
               <button type="button" className="link-btn w-full text-left" onClick={() => onPick(it)}>
-                <span className="kind-tag">{it.kind}</span> {titleOf(it)}
+                <span className="kind-tag" data-kind={it.kind}>
+                  {it.kind}
+                </span>{' '}
+                {titleOf(it)}
               </button>
             </li>
           ))}

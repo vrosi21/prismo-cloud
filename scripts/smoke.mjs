@@ -532,8 +532,30 @@ ids = r.json.items.map((t) => t.id)
 check('the next month: the trip runs into it, no undated tasks without someday', ids.join() === [standup.id, trip.id].join(), JSON.stringify(r.json.items.map((t) => t.title)))
 r = await call('POST', '/v1/items', { body: { kind: 'event', title: 'lab', date: '2026-11-16', time: '17:00', minutes: 90, repeat: 'weekly', repeat_until: '2027-01-18', tags: ['DSAI', 'course:DMS', 'type:lab'] } })
 check('categories and a repeat that ends', r.status === 201 && r.json.tags.join() === 'dsai,course:dms,type:lab' && r.json.repeat_until === '2027-01-18', r.text.slice(0, 200))
-r = await call('PATCH', `/v1/items/${r.json.id}`, { body: { repeat: null } })
-check('no repeat, no end of it', r.json?.repeat_until === null && r.json.tags.length === 3)
+const labId = r.json.id
+r = await call('PATCH', `/v1/items/${labId}`, { body: { exceptions: { '2026-11-23': { title: ' dms lab 2 ', date: '2026-11-24', time: '18:00' }, '2026-11-30': { skip: true }, '2026-12-07': {} } } })
+check(
+  'one appearance moved and named, one skipped, an empty one dropped',
+  r.status === 200 && JSON.stringify(r.json.exceptions) === JSON.stringify({ '2026-11-23': { date: '2026-11-24', time: '18:00', title: 'dms lab 2' }, '2026-11-30': { skip: true } }),
+  r.text.slice(0, 240),
+)
+r = await call('GET', `/v1/items?ids=${labId}`)
+check('lists carry the exceptions too', r.json?.items[0]?.exceptions['2026-11-30']?.skip === true)
+r = await call('PATCH', `/v1/items/${labId}`, { body: { exceptions: { '2026-11-23': { time: 'six' } } } })
+check('a bad time in an exception is refused', r.status === 400, r.text)
+r = await call('PATCH', `/v1/items/${labId}`, { body: { repeat: null } })
+check('no repeat, no end of it, no exceptions', r.json?.repeat_until === null && r.json.tags.length === 3 && Object.keys(r.json.exceptions).length === 0)
+r = await call('PATCH', `/v1/items/${labId}`, { body: { exceptions: { '2026-11-23': { title: 'x' } } } })
+check('exceptions without a repeat are refused', r.status === 400, r.text)
+r = await call('POST', '/v1/items', { body: { kind: 'task', title: 'late report', date: '2026-01-04', repeat: 'weekly' } })
+const late = r.json
+r = await call('PATCH', `/v1/items/${late.id}`, { body: { status: 'done' } })
+// The server's today is UTC; within a week of it either way, whatever the clock here says.
+const daysAway = (Date.parse(r.json?.date) - Date.now()) / 86_400_000
+check('a repeat ticked off late goes on to a day not past', r.status === 200 && r.json.status === 'todo' && daysAway > -1.5 && daysAway < 7, r.text.slice(0, 200))
+await call('DELETE', `/v1/items/${late.id}`)
+await call('DELETE', `/v1/items/${late.id}?permanent=1`)
+r = { json: { id: labId } }
 await call('DELETE', `/v1/items/${r.json.id}`)
 await call('DELETE', `/v1/items/${r.json.id}?permanent=1`)
 r = await call('GET', '/v1/items?from=2026-12-01&to=2026-11-01')

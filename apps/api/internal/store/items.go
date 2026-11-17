@@ -33,13 +33,25 @@ type Item struct {
 	RepeatUntil  *string         `json:"repeat_until"` // last day a repeat may fall on
 	Color        *int            `json:"color"`
 	// Categories: "dsai" is one, "course:mai3" a facet inside it.
-	Tags      []string   `json:"tags"`
-	Version   int        `json:"version"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at"`
+	Tags []string `json:"tags"`
+	// Exceptions of a repeating item, by the day each would have had.
+	Exceptions map[string]Exception `json:"exceptions"`
+	Version    int                  `json:"version"`
+	CreatedAt  time.Time            `json:"created_at"`
+	UpdatedAt  time.Time            `json:"updated_at"`
+	DeletedAt  *time.Time           `json:"deleted_at"`
 	// Items this one links to and items that link to it, only on a single read.
 	Links *[]ItemRef `json:"links,omitempty"`
+}
+
+// Exception changes one appearance of a repeating item (migration 0011):
+// moves it, names it, or skips it. A field left out stays as the series has it.
+type Exception struct {
+	Date    *string `json:"date,omitempty"`
+	Time    *string `json:"time,omitempty"`
+	Minutes *int    `json:"minutes,omitempty"`
+	Title   *string `json:"title,omitempty"`
+	Skip    bool    `json:"skip,omitempty"`
 }
 
 // ItemRef names another item, enough to show it as a link.
@@ -66,6 +78,7 @@ type ItemFields struct {
 	RepeatUntil       *string
 	Color             *int
 	Tags              []string
+	Exceptions        map[string]Exception
 	Trashed           bool
 }
 
@@ -74,19 +87,23 @@ var ErrConflict = errors.New("changed elsewhere")
 
 const itemCols = `i.id::text, i.kind, i.title, left(i.body, 280), i.collection_id::text, i.status, i.done_at,
 	to_char(i.due_date, 'YYYY-MM-DD'), to_char(i.due_time, 'HH24:MI'), to_char(i.end_date, 'YYYY-MM-DD'),
-	i.minutes, i.repeat, to_char(i.repeat_until, 'YYYY-MM-DD'), i.color, i.tags,
+	i.minutes, i.repeat, to_char(i.repeat_until, 'YYYY-MM-DD'), i.color, i.tags, i.exceptions,
 	i.version, i.created_at, i.updated_at, i.deleted_at`
 
 func scanItem(row pgx.Row, extra ...any) (Item, error) {
 	var it Item
 	var color *int16
+	var exceptions []byte
 	dest := append([]any{&it.ID, &it.Kind, &it.Title, &it.Excerpt, &it.CollectionID, &it.Status, &it.DoneAt,
-		&it.Date, &it.Time, &it.EndDate, &it.Minutes, &it.Repeat, &it.RepeatUntil, &color, &it.Tags, &it.Version,
-		&it.CreatedAt, &it.UpdatedAt, &it.DeletedAt}, extra...)
+		&it.Date, &it.Time, &it.EndDate, &it.Minutes, &it.Repeat, &it.RepeatUntil, &color, &it.Tags, &exceptions,
+		&it.Version, &it.CreatedAt, &it.UpdatedAt, &it.DeletedAt}, extra...)
 	err := row.Scan(dest...)
 	if color != nil {
 		c := int(*color)
 		it.Color = &c
+	}
+	if err == nil {
+		it.Exceptions, err = readExceptions(exceptions)
 	}
 	return it, err
 }
@@ -203,11 +220,12 @@ func (s *Store) CreateItem(ctx context.Context, ownerID string, f ItemFields) (I
 	var id string
 	err := s.Pool.QueryRow(ctx,
 		`insert into items (owner_id, kind, title, body, canvas, collection_id, status, done_at,
-		                    due_date, due_time, end_date, minutes, repeat, repeat_until, color, tags)
-		 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		                    due_date, due_time, end_date, minutes, repeat, repeat_until, color, tags, exceptions)
+		 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb)
 		 returning id::text`,
 		ownerID, f.Kind, f.Title, f.Body, nullJSON(f.Canvas), f.CollectionID, f.Status, f.DoneAt,
-		f.Date, f.Time, f.EndDate, f.Minutes, f.Repeat, f.RepeatUntil, f.Color, tagsOrEmpty(f.Tags)).Scan(&id)
+		f.Date, f.Time, f.EndDate, f.Minutes, f.Repeat, f.RepeatUntil, f.Color, tagsOrEmpty(f.Tags),
+		exceptionsJSON(f.Exceptions)).Scan(&id)
 	if err != nil {
 		return Item{}, err
 	}
@@ -224,15 +242,20 @@ func (s *Store) UpdateItem(ctx context.Context, ownerID, id string, version int,
 		var cur int
 		var deleted *time.Time
 		var color *int16
+		var exceptions []byte
 		err := tx.QueryRow(ctx,
 			`select kind, title, body, canvas, collection_id::text, status, done_at,
 			        to_char(due_date, 'YYYY-MM-DD'), to_char(due_time, 'HH24:MI'), to_char(end_date, 'YYYY-MM-DD'),
-			        minutes, repeat, to_char(repeat_until, 'YYYY-MM-DD'), color, tags, version, deleted_at
+			        minutes, repeat, to_char(repeat_until, 'YYYY-MM-DD'), color, tags, exceptions, version, deleted_at
 			 from items where owner_id = $1 and id = $2 for update`, ownerID, id).
 			Scan(&f.Kind, &f.Title, &f.Body, &f.Canvas, &f.CollectionID, &f.Status, &f.DoneAt,
-				&f.Date, &f.Time, &f.EndDate, &f.Minutes, &f.Repeat, &f.RepeatUntil, &color, &f.Tags, &cur, &deleted)
+				&f.Date, &f.Time, &f.EndDate, &f.Minutes, &f.Repeat, &f.RepeatUntil, &color, &f.Tags, &exceptions,
+				&cur, &deleted)
 		if err != nil {
 			return notFound(err)
+		}
+		if f.Exceptions, err = readExceptions(exceptions); err != nil {
+			return err
 		}
 		if color != nil {
 			c := int(*color)
@@ -252,11 +275,11 @@ func (s *Store) UpdateItem(ctx context.Context, ownerID, id string, version int,
 			        status = $8, done_at = $9, due_date = $10, due_time = $11, end_date = $12,
 			        minutes = $13, repeat = $14, repeat_until = $15, color = $16, tags = $17,
 			        deleted_at = case when $18 then coalesce(deleted_at, now()) end,
-			        version = version + $19, updated_at = now()
+			        version = version + $19, exceptions = $20::jsonb, updated_at = now()
 			 where owner_id = $1 and id = $2`,
 			ownerID, id, f.Kind, f.Title, f.Body, nullJSON(f.Canvas), f.CollectionID,
 			f.Status, f.DoneAt, f.Date, f.Time, f.EndDate, f.Minutes, f.Repeat, f.RepeatUntil, f.Color,
-			tagsOrEmpty(f.Tags), f.Trashed, boolInt(content))
+			tagsOrEmpty(f.Tags), f.Trashed, boolInt(content), exceptionsJSON(f.Exceptions))
 		return err
 	})
 	if err != nil {
@@ -316,6 +339,27 @@ func tagsOrEmpty(t []string) []string {
 		return []string{}
 	}
 	return t
+}
+
+func readExceptions(b []byte) (map[string]Exception, error) {
+	m := map[string]Exception{}
+	if len(b) == 0 {
+		return m, nil
+	}
+	err := json.Unmarshal(b, &m)
+	return m, err
+}
+
+// exceptionsJSON is the column value; never null, the column says so.
+func exceptionsJSON(m map[string]Exception) string {
+	if len(m) == 0 {
+		return "{}"
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
 }
 
 func nullJSON(b []byte) any {

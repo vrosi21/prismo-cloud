@@ -181,12 +181,12 @@
       "ref": "one-occurrence",
       "kind": "task",
       "title": "repeats: change one occurrence only",
-      "status": "todo",
+      "status": "done",
       "tags": [
         "prismo",
         "area:time"
       ],
-      "body": "Today moving one appearance of a repeating event moves the whole series."
+      "body": "Move, rename or skip one appearance of a repeat; or that one and the later ones; or all of them. Cards and pins show the next appearance."
     },
     {
       "ref": "sharex-off",
@@ -271,7 +271,7 @@
             "width": 640,
             "height": 170,
             "color": "3",
-            "text": "# prismo roadmap\nOne column per stage. **Tick a card** when it is done, **drag** it to another column, **double-click** it for its notes and to put it on the calendar.\nArrows: what has to happen first. Hover a card to light up everything before it."
+            "text": "# prismo roadmap\nOne column per stage. **Tick a card** when it is done, **double-click** it for its notes and to put it on the calendar. Press **edit** to drag cards to another column.\nArrows: what has to happen first. Hover a card to light up everything before it."
           },
           {
             "id": "f-0",

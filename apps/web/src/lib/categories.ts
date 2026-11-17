@@ -24,7 +24,8 @@ export const topsOf = (it: Pick<Item, 'tags'>) => {
   const tops = (it.tags ?? []).filter((t) => !isFacet(t))
   return tops.length ? tops : [NONE]
 }
-export const facetsOf = (it: Pick<Item, 'tags'>) => (it.tags ?? []).filter(isFacet)
+// "pin:<section>" puts an item on the pinned board (lib/pins.ts); it is no filter.
+export const facetsOf = (it: Pick<Item, 'tags'>) => (it.tags ?? []).filter((t) => isFacet(t) && !t.startsWith('pin:'))
 
 /** Every category these items have, its count, and the facets inside it. */
 export function categories(items: Item[]): Category[] {

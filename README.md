@@ -105,7 +105,12 @@ side by side, or 4 in a square); keys `d` `x` `w` `m` `g`, `t` for today, `j`/`k
 step, `c` for new. Drag on the hours to make an event, drag one to move it, drag its
 bottom edge to make it longer; in a month, drag a day to another day. Beside it the
 tasks: what is late, what has no day, what was done lately. A repeating task ticked off
-moves to its next day; a repeat can have a last day ("until").
+moves to its next day that is not past; a repeat can have a last day ("until").
+
+**One of a repeat** can differ from the rest, as in Google Calendar: moving one (drag it,
+or "this one" in its panel) asks "only this one / this and later ones / all of them";
+one can have its own title ("rf lab 2 + lab 1 defense") or be skipped. Cards and pins
+show the *next* appearance: a weekly lab that went by shows next week's.
 
 **Categories** come from tags, with nothing to set up: a plain tag (`dsai`) is a
 category, a `key:value` tag (`course:mai3`, `type:exam`) a filter inside it. The
@@ -117,7 +122,10 @@ Markdown underneath (the "md" button shows it): `# ` is a heading, `- [ ] ` a ch
 `$$x^2$$` turns into a formula (saved as `$x^2$`; a block is `$$ ... $$`), `/` at the
 start of a line lists the blocks. A board is an endless canvas: notes, text, frames,
 cards for tasks and notebooks, arrows between them (drag a dot on a card's side).
-Hovering a card lights up everything that leads to it. Boards are saved as
+A board opens to look at: a press selects a card, and only a selected card can be
+dragged; "edit" turns on adding, arrows, resizing and deleting. A card takes its item's
+colour; "legend" lists what each colour stands for on that board. Hovering a card lights
+up everything that leads to it. Boards are saved as
 [JSON Canvas](https://jsoncanvas.org) and can be downloaded as a `.canvas` file, or a
 `.canvas` file added to a board.
 
@@ -125,6 +133,13 @@ Hovering a card lights up everything that leads to it. Boards are saved as
 boards whose cards point at them (`lib/bundle.ts` describes the format). It is how a
 board starts with real content; [docs/boards/prismo-roadmap.json](docs/boards/prismo-roadmap.json)
 is Prismo's own roadmap. Personal bundles go in `local/`, which git ignores.
+
+The list on the left is a folder tree, the library's folders (those holding only files
+stay out of it): "+ folder", or "+" on a folder for one inside it; pressing a folder
+makes it where new ones and imports go. With nothing open, the lookout shows the
+**pinned board**: items pinned in the details panel ("pinned", in a section of your
+choice), by category and section, each at its next appearance; done and past ones drop
+off. A pin is a tag, `pin:<section>`, so bundles can carry pins.
 
 A page's header says which folder it is in and moves it (or makes a new folder); "trash"
 is next to it. A board takes its own cards along, the ones in the same folder as the

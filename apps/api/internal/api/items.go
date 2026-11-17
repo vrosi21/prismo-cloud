@@ -73,7 +73,9 @@ type itemRequest struct {
 	RepeatUntil  optionalString  `json:"repeat_until"`
 	Color        optionalInt     `json:"color"`
 	Tags         *[]string       `json:"tags"`
-	Trashed      *bool           `json:"trashed"`
+	// The whole set of exceptions of a repeat; {} clears them.
+	Exceptions *map[string]store.Exception `json:"exceptions"`
+	Trashed    *bool                       `json:"trashed"`
 	// The version the caller read; a change to the body or the canvas is
 	// refused (409) if someone changed them since. 0 skips the check.
 	Version int `json:"version"`
@@ -131,6 +133,9 @@ func (req *itemRequest) apply(f *store.ItemFields, now time.Time) string {
 		}
 		f.Tags = tags
 	}
+	if req.Exceptions != nil {
+		f.Exceptions = *req.Exceptions
+	}
 
 	// Asking for a time (or a length, a last day, a repeat) on something
 	// with no day is a mistake worth saying; taking the day away quietly
@@ -138,6 +143,8 @@ func (req *itemRequest) apply(f *store.ItemFields, now time.Time) string {
 	switch {
 	case f.Repeat == nil && req.RepeatUntil.Value != nil:
 		return "an end of the repeat needs a repeat"
+	case f.Repeat == nil && req.Exceptions != nil && len(*req.Exceptions) > 0:
+		return "changing one of a repeat needs a repeat"
 	case f.Date == nil && (req.Time.Value != nil || req.EndDate.Value != nil || req.Repeat.Value != nil):
 		return "a time, a last day or a repeat needs a day"
 	case f.Time == nil && req.Minutes.Value != nil:
@@ -162,7 +169,7 @@ func (req *itemRequest) apply(f *store.ItemFields, now time.Time) string {
 		f.Time, f.EndDate, f.Repeat = nil, nil, nil
 	}
 	if f.Repeat == nil {
-		f.RepeatUntil = nil
+		f.RepeatUntil, f.Exceptions = nil, nil
 	}
 	if f.Time == nil {
 		f.Minutes = nil
@@ -173,7 +180,10 @@ func (req *itemRequest) apply(f *store.ItemFields, now time.Time) string {
 
 	// A repeating task ticked off moves on to its next day instead.
 	if f.Status != nil && *f.Status == "done" && f.Repeat != nil && f.Date != nil {
-		advance(f) // the last one, past repeat_until, just stays done
+		advance(f, now) // the last one, past repeat_until, just stays done
+	}
+	if msg := cleanExceptions(f); msg != "" {
+		return msg
 	}
 	switch {
 	case f.Status != nil && *f.Status == "done":
@@ -235,26 +245,47 @@ func (req *itemRequest) apply(f *store.ItemFields, now time.Time) string {
 }
 
 // advance moves a repeating item to its next day, keeping how many days it
-// spans, and opens it again.
-func advance(f *store.ItemFields) {
+// spans, and opens it again. Ticked off late, it goes on to the next day
+// that is not past yet: a deadline that went by is not due again. The
+// exceptions of the days left behind go with them.
+func advance(f *store.ItemFields, now time.Time) {
 	from, err := time.Parse(dayLayout, *f.Date)
 	if err != nil {
 		return
 	}
-	next := from
-	switch *f.Repeat {
-	case "daily":
-		next = from.AddDate(0, 0, 1)
-	case "weekly":
-		next = from.AddDate(0, 0, 7)
-	case "monthly":
-		next = from.AddDate(0, 1, 0)
-	case "yearly":
-		next = from.AddDate(1, 0, 0)
+	today := now.Format(dayLayout)
+	var next time.Time
+	// The n-th step from the start, not one step at a time: the 31st stays
+	// the 31st where the month has one.
+	for n := 1; n <= 40000; n++ {
+		switch *f.Repeat {
+		case "daily":
+			next = from.AddDate(0, 0, n)
+		case "weekly":
+			next = from.AddDate(0, 0, 7*n)
+		case "monthly":
+			next = from.AddDate(0, n, 0)
+		case "yearly":
+			next = from.AddDate(n, 0, 0)
+		default:
+			return
+		}
+		// No 31st in November: that month is skipped, as the calendar does.
+		if (*f.Repeat == "monthly" || *f.Repeat == "yearly") && next.Day() != from.Day() {
+			continue
+		}
+		if next.Format(dayLayout) >= today {
+			break
+		}
 	}
 	day := next.Format(dayLayout)
 	if f.RepeatUntil != nil && day > *f.RepeatUntil {
 		return
+	}
+	for k := range f.Exceptions {
+		if k < day {
+			delete(f.Exceptions, k)
+		}
 	}
 	if f.EndDate != nil {
 		if end, err := time.Parse(dayLayout, *f.EndDate); err == nil {
@@ -264,6 +295,41 @@ func advance(f *store.ItemFields) {
 	}
 	todo := "todo"
 	f.Date, f.Status = &day, &todo
+}
+
+// cleanExceptions checks the exceptions of a repeat and drops the empty ones.
+func cleanExceptions(f *store.ItemFields) string {
+	if len(f.Exceptions) > 500 {
+		return "at most 500 changed days in one repeat"
+	}
+	for day, x := range f.Exceptions {
+		if x.Title != nil {
+			t := strings.TrimSpace(*x.Title)
+			x.Title = &t
+			if t == "" {
+				x.Title = nil
+			}
+		}
+		if x.Skip {
+			x = store.Exception{Skip: true}
+		}
+		switch {
+		case !validDay(day), x.Date != nil && !validDay(*x.Date):
+			return "a day looks like 2026-11-01"
+		case x.Time != nil && !validTime(*x.Time):
+			return "a time looks like 09:30"
+		case x.Minutes != nil && (*x.Minutes < 1 || *x.Minutes > 7*24*60):
+			return "a length is 1 minute to 7 days"
+		case x.Title != nil && utf8.RuneCountInString(*x.Title) > 200:
+			return "a title is at most 200 characters"
+		}
+		if x == (store.Exception{}) {
+			delete(f.Exceptions, day)
+		} else {
+			f.Exceptions[day] = x
+		}
+	}
+	return ""
 }
 
 func (s *Server) itemError(w http.ResponseWriter, r *http.Request, err error) bool {
