@@ -1,7 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Item } from '../api'
+import { importBundle, readBundle } from '../lib/bundle'
 import { short } from '../lib/days'
 import { lookout, openItem, openOnLookout, titleOf, useItem, useItemChanges, useItems } from '../lib/items'
+import { errorText, log } from '../lib/log'
 import { useFolderTree } from '../lib/queries'
 import { useContentSaver } from '../lib/saver'
 import { useStore } from '../lib/store'
@@ -42,6 +45,22 @@ export function LookoutWall() {
       /* not remembered */
     }
   }
+  const qc = useQueryClient()
+  const [importing, setImporting] = useState<string | null>(null)
+  const runImport = async (file: File) => {
+    try {
+      const bundle = readBundle(await file.text())
+      setImporting('0%')
+      const boards = await importBundle(bundle, into, (n, total) => setImporting(`${Math.round((n / total) * 100)}%`))
+      log('ok', `added ${bundle.items.length} items from ${file.name}`)
+      if (boards[0]) lookout.set(boards[0])
+    } catch (e) {
+      log('err', `import stopped: ${errorText(e)}`)
+    } finally {
+      setImporting(null)
+      void qc.invalidateQueries({ queryKey: ['items'] })
+    }
+  }
   const make = (kind: 'notebook' | 'board') =>
     create.mutate({ item: { kind, title: '', collection_id: into } }, { onSuccess: (it) => openOnLookout(it.id) })
 
@@ -56,6 +75,20 @@ export function LookoutWall() {
           <button type="button" className="btn btn-sm btn-accent" disabled={create.isPending} onClick={() => make('board')}>
             + board
           </button>
+          <label className="btn btn-sm cursor-pointer" title="add a Prismo bundle (.json): items, links and boards in one file" aria-disabled={importing !== null}>
+            {importing ?? 'import'}
+            <input
+              type="file"
+              accept=".json,application/json"
+              hidden
+              disabled={importing !== null}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) void runImport(file)
+              }}
+            />
+          </label>
         </div>
         <label className="flex flex-col gap-1">
           <span className="label">new ones go in</span>

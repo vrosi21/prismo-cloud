@@ -101,7 +101,7 @@ export function occurrences(items: Item[], from: string, to: string): Occurrence
         continue
       }
       const date = iso(d)
-      if (date > to) break
+      if (date > to || (item.repeat_until && date > item.repeat_until)) break
       const end = span ? plusDays(date, span) : date
       if (end >= from) out.push({ item, date, end, key: `${item.id}@${date}` })
       if (!item.repeat) break

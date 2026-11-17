@@ -204,13 +204,33 @@ export function ItemForm({ item, onClose, full = false }: { item: Item; onClose?
             </div>
           </Row>
           <Row label="repeat">
-            <select className="field !w-auto" value={item.repeat ?? ''} onChange={(e) => set({ repeat: (e.target.value as Repeat) || null })}>
-              {REPEATS.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-wrap items-center gap-2">
+              <select className="field !w-auto" value={item.repeat ?? ''} onChange={(e) => set({ repeat: (e.target.value as Repeat) || null })}>
+                {REPEATS.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+              {item.repeat && (
+                <>
+                  <span className="dim">until</span>
+                  <input
+                    type="date"
+                    className="field !w-auto"
+                    aria-label="repeat until"
+                    min={item.date ?? undefined}
+                    value={item.repeat_until ?? ''}
+                    onChange={(e) => set({ repeat_until: e.target.value || null })}
+                  />
+                  {item.repeat_until && (
+                    <button type="button" className="btn btn-sm" onClick={() => set({ repeat_until: null })}>
+                      forever
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </Row>
         </>
       )}
@@ -227,6 +247,8 @@ export function ItemForm({ item, onClose, full = false }: { item: Item; onClose?
           ))}
         </div>
       </Row>
+
+      <Tags item={item} onSave={(tags) => set({ tags })} />
 
       <Row label="folder">
         <select className="field !w-auto max-w-full" value={item.collection_id ?? ''} onChange={(e) => set({ collection_id: e.target.value || null })}>
@@ -394,5 +416,32 @@ function Links({ item }: { item: Item }) {
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * Categories, typed as words: "dsai" is a category, "course:mai3" a filter
+ * inside it. The calendar's category list is made from these.
+ */
+function Tags({ item, onSave }: { item: Item; onSave: (tags: string[]) => void }) {
+  const tags = item.tags ?? [] // a server from before tags sends none
+  const [text, setText] = useState(tags.join(', '))
+  useEffect(() => setText(tags.join(', ')), [tags.join()]) // eslint-disable-line react-hooks/exhaustive-deps
+  const save = () => {
+    const next = [...new Set(text.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean))]
+    if (next.join(',') !== tags.join(',')) onSave(next)
+  }
+  return (
+    <Row label="tags">
+      <input
+        className="field"
+        value={text}
+        placeholder="dsai, course:mai3, type:exam"
+        title='a plain word is a category; "key:value" is a filter inside it'
+        onChange={(e) => setText(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
+      />
+    </Row>
   )
 }

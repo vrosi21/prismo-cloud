@@ -30,11 +30,14 @@ type Item struct {
 	EndDate      *string         `json:"end_date"` // last day of a multi-day item
 	Minutes      *int            `json:"minutes"`  // length of a timed item
 	Repeat       *string         `json:"repeat"`
+	RepeatUntil  *string         `json:"repeat_until"` // last day a repeat may fall on
 	Color        *int            `json:"color"`
-	Version      int             `json:"version"`
-	CreatedAt    time.Time       `json:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
-	DeletedAt    *time.Time      `json:"deleted_at"`
+	// Categories: "dsai" is one, "course:mai3" a facet inside it.
+	Tags      []string   `json:"tags"`
+	Version   int        `json:"version"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
 	// Items this one links to and items that link to it, only on a single read.
 	Links *[]ItemRef `json:"links,omitempty"`
 }
@@ -60,7 +63,9 @@ type ItemFields struct {
 	EndDate           *string
 	Minutes           *int
 	Repeat            *string
+	RepeatUntil       *string
 	Color             *int
+	Tags              []string
 	Trashed           bool
 }
 
@@ -69,13 +74,14 @@ var ErrConflict = errors.New("changed elsewhere")
 
 const itemCols = `i.id::text, i.kind, i.title, left(i.body, 280), i.collection_id::text, i.status, i.done_at,
 	to_char(i.due_date, 'YYYY-MM-DD'), to_char(i.due_time, 'HH24:MI'), to_char(i.end_date, 'YYYY-MM-DD'),
-	i.minutes, i.repeat, i.color, i.version, i.created_at, i.updated_at, i.deleted_at`
+	i.minutes, i.repeat, to_char(i.repeat_until, 'YYYY-MM-DD'), i.color, i.tags,
+	i.version, i.created_at, i.updated_at, i.deleted_at`
 
 func scanItem(row pgx.Row, extra ...any) (Item, error) {
 	var it Item
 	var color *int16
 	dest := append([]any{&it.ID, &it.Kind, &it.Title, &it.Excerpt, &it.CollectionID, &it.Status, &it.DoneAt,
-		&it.Date, &it.Time, &it.EndDate, &it.Minutes, &it.Repeat, &color, &it.Version,
+		&it.Date, &it.Time, &it.EndDate, &it.Minutes, &it.Repeat, &it.RepeatUntil, &color, &it.Tags, &it.Version,
 		&it.CreatedAt, &it.UpdatedAt, &it.DeletedAt}, extra...)
 	err := row.Scan(dest...)
 	if color != nil {
@@ -197,11 +203,11 @@ func (s *Store) CreateItem(ctx context.Context, ownerID string, f ItemFields) (I
 	var id string
 	err := s.Pool.QueryRow(ctx,
 		`insert into items (owner_id, kind, title, body, canvas, collection_id, status, done_at,
-		                    due_date, due_time, end_date, minutes, repeat, color)
-		 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		                    due_date, due_time, end_date, minutes, repeat, repeat_until, color, tags)
+		 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		 returning id::text`,
 		ownerID, f.Kind, f.Title, f.Body, nullJSON(f.Canvas), f.CollectionID, f.Status, f.DoneAt,
-		f.Date, f.Time, f.EndDate, f.Minutes, f.Repeat, f.Color).Scan(&id)
+		f.Date, f.Time, f.EndDate, f.Minutes, f.Repeat, f.RepeatUntil, f.Color, tagsOrEmpty(f.Tags)).Scan(&id)
 	if err != nil {
 		return Item{}, err
 	}
@@ -221,10 +227,10 @@ func (s *Store) UpdateItem(ctx context.Context, ownerID, id string, version int,
 		err := tx.QueryRow(ctx,
 			`select kind, title, body, canvas, collection_id::text, status, done_at,
 			        to_char(due_date, 'YYYY-MM-DD'), to_char(due_time, 'HH24:MI'), to_char(end_date, 'YYYY-MM-DD'),
-			        minutes, repeat, color, version, deleted_at
+			        minutes, repeat, to_char(repeat_until, 'YYYY-MM-DD'), color, tags, version, deleted_at
 			 from items where owner_id = $1 and id = $2 for update`, ownerID, id).
 			Scan(&f.Kind, &f.Title, &f.Body, &f.Canvas, &f.CollectionID, &f.Status, &f.DoneAt,
-				&f.Date, &f.Time, &f.EndDate, &f.Minutes, &f.Repeat, &color, &cur, &deleted)
+				&f.Date, &f.Time, &f.EndDate, &f.Minutes, &f.Repeat, &f.RepeatUntil, &color, &f.Tags, &cur, &deleted)
 		if err != nil {
 			return notFound(err)
 		}
@@ -244,13 +250,13 @@ func (s *Store) UpdateItem(ctx context.Context, ownerID, id string, version int,
 		_, err = tx.Exec(ctx,
 			`update items set kind = $3, title = $4, body = $5, canvas = $6, collection_id = $7,
 			        status = $8, done_at = $9, due_date = $10, due_time = $11, end_date = $12,
-			        minutes = $13, repeat = $14, color = $15,
-			        deleted_at = case when $16 then coalesce(deleted_at, now()) end,
-			        version = version + $17, updated_at = now()
+			        minutes = $13, repeat = $14, repeat_until = $15, color = $16, tags = $17,
+			        deleted_at = case when $18 then coalesce(deleted_at, now()) end,
+			        version = version + $19, updated_at = now()
 			 where owner_id = $1 and id = $2`,
 			ownerID, id, f.Kind, f.Title, f.Body, nullJSON(f.Canvas), f.CollectionID,
-			f.Status, f.DoneAt, f.Date, f.Time, f.EndDate, f.Minutes, f.Repeat, f.Color,
-			f.Trashed, boolInt(content))
+			f.Status, f.DoneAt, f.Date, f.Time, f.EndDate, f.Minutes, f.Repeat, f.RepeatUntil, f.Color,
+			tagsOrEmpty(f.Tags), f.Trashed, boolInt(content))
 		return err
 	})
 	if err != nil {
@@ -303,6 +309,13 @@ func (s *Store) UnlinkItems(ctx context.Context, ownerID, a, b string) error {
 		return ErrNotFound
 	}
 	return err
+}
+
+func tagsOrEmpty(t []string) []string {
+	if t == nil {
+		return []string{}
+	}
+	return t
 }
 
 func nullJSON(b []byte) any {

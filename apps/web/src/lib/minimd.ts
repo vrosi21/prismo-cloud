@@ -51,3 +51,24 @@ export function miniMarkdown(text: string): string {
   closeList()
   return out.join('')
 }
+
+/**
+ * A few words from the start of a text, for a card or a tile: headings,
+ * tables and formula blocks left out, Markdown marks taken off.
+ */
+export function plainExcerpt(md: string, max = 140): string {
+  const out: string[] = []
+  let inMath = false
+  for (const line of md.split('\n')) {
+    const t = line.trim()
+    if (t === '$$' || (t.startsWith('$$') && !t.endsWith('$$'))) {
+      inMath = !inMath
+      continue
+    }
+    if (inMath || !t || t.startsWith('#') || t.startsWith('|') || t.startsWith('$$')) continue
+    out.push(t.replace(/^[-*>]\s+(\[[ x]\]\s+)?/, '').replace(/[*_`~]/g, '').replace(/\$([^$]+)\$/g, '$1'))
+    if (out.join(' ').length > max) break
+  }
+  const text = out.join(' ')
+  return text.length > max ? `${text.slice(0, max - 1)}...` : text
+}

@@ -1059,3 +1059,14 @@ input.board-group-label { width: 280px; height: auto; }
 .item-tile { display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 8px 10px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; box-shadow: inset 4px 0 0 0 var(--tile, var(--accent)), 0 0 0 var(--px) var(--line); }
 .item-tile:hover { background: var(--panel-2); }
 .item-tile-text { color: var(--ink-dim); font-size: 17px; line-height: 1.1; max-height: 2.3em; overflow: hidden; }
+
+/* The calendar's categories: a row per category, its facets as chips when open. */
+.cats { display: flex; max-height: 34vh; flex-direction: column; gap: 2px; overflow-y: auto; }
+.cat-row { display: flex; align-items: center; gap: 6px; }
+.cat-name { min-width: 0; flex: 1; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); cursor: pointer; }
+.cat-only { visibility: hidden; padding: 0 5px; font-size: 16px; }
+.cat-row:hover .cat-only, .cat-only:focus-visible { visibility: visible; }
+.cat-facet { display: flex; flex-direction: column; gap: 3px; padding: 2px 0 6px 28px; }
+.cat-facet .label { margin: 0; }
+.cat-facet .chip { padding: 0 6px; font-size: 17px; }
+.tag-chip { padding: 0 5px; background: var(--bg-deep); color: var(--ink-dim); font-size: 15px; line-height: 16px; }

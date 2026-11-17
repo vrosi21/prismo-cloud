@@ -27,7 +27,9 @@ export function itemRoutes({ uuid, body, collections }) {
       end_date: null,
       minutes: null,
       repeat: null,
+      repeat_until: null,
       color: null,
+      tags: [],
       version: 1,
       created_at: now(),
       updated_at: now(),
@@ -42,6 +44,7 @@ export function itemRoutes({ uuid, body, collections }) {
 
   // What follows from what, then is it valid. Mirrors itemRequest.apply.
   function settle(it, req) {
+    if (!it.repeat && req.repeat_until) return 'an end of the repeat needs a repeat'
     if (it.date === null && (req.time || req.end_date || req.repeat)) return 'a time, a last day or a repeat needs a day'
     if (it.time === null && req.minutes) return 'a length needs a time'
     if (it.kind === 'task' && !it.status) it.status = 'todo'
@@ -50,6 +53,8 @@ export function itemRoutes({ uuid, body, collections }) {
     if (it.kind !== 'board') it.canvas = undefined
     if (!it.date) Object.assign(it, { time: null, end_date: null, repeat: null })
     if (!it.time) it.minutes = null
+    if (!it.repeat) it.repeat_until = null
+    if (req.tags) it.tags = [...new Set(req.tags.map((t) => t.trim().toLowerCase()).filter(Boolean))]
     if (it.end_date && it.end_date === it.date) it.end_date = null
     if (it.status === 'done' && it.repeat && it.date) {
       const d = new Date(`${it.date}T12:00:00`)
@@ -60,6 +65,10 @@ export function itemRoutes({ uuid, body, collections }) {
       if (it.repeat === 'yearly') d.setFullYear(d.getFullYear() + 1)
       const shift = Math.round((d - from) / 86_400_000)
       const iso = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+      if (it.repeat_until && iso(d) > it.repeat_until) {
+        it.done_at = it.done_at ?? now()
+        return ''
+      }
       it.date = iso(d)
       if (it.end_date) {
         const e = new Date(`${it.end_date}T12:00:00`)

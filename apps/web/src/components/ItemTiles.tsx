@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { api } from '../api'
 import { openOnLookout, titleOf, useItems } from '../lib/items'
+import { plainExcerpt } from '../lib/minimd'
 import { errorText, log } from '../lib/log'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -35,7 +36,7 @@ export function ItemTiles({ folderId, q, trashed, hidden }: { folderId?: string;
                 <span className="kind-tag">{it.kind}</span>
                 <span className="truncate">{titleOf(it)}</span>
               </span>
-              {it.excerpt && <span className="item-tile-text">{it.excerpt.replace(/[#*`>$\-[\]]/g, '')}</span>}
+              {it.excerpt && <span className="item-tile-text">{plainExcerpt(it.excerpt, 90)}</span>}
             </button>
             {trashed && (
               <div className="flex gap-2 pt-1">

@@ -8,3 +8,6 @@ bin/
 Thumbs.db
 .wrangler/
 *.tsbuildinfo
+
+# Personal data kept next to the code but never committed (e.g. board bundles).
+/local/

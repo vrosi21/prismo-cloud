@@ -105,7 +105,12 @@ side by side, or 4 in a square); keys `d` `x` `w` `m` `g`, `t` for today, `j`/`k
 step, `c` for new. Drag on the hours to make an event, drag one to move it, drag its
 bottom edge to make it longer; in a month, drag a day to another day. Beside it the
 tasks: what is late, what has no day, what was done lately. A repeating task ticked off
-moves to its next day.
+moves to its next day; a repeat can have a last day ("until").
+
+**Categories** come from tags, with nothing to set up: a plain tag (`dsai`) is a
+category, a `key:value` tag (`course:mai3`, `type:exam`) a filter inside it. The
+calendar lists them like Google's calendars: switch one off, show one "only", or open it
+to switch off a course or a type.
 
 **Lookout**: notebooks and boards. A notebook types like a normal editor and is
 Markdown underneath (the "md" button shows it): `# ` is a heading, `- [ ] ` a checkbox,
@@ -115,6 +120,11 @@ cards for tasks and notebooks, arrows between them (drag a dot on a card's side)
 Hovering a card lights up everything that leads to it. Boards are saved as
 [JSON Canvas](https://jsoncanvas.org) and can be downloaded as a `.canvas` file, or a
 `.canvas` file added to a board.
+
+**Import** (lookout) adds a *bundle*: one JSON file of items, links between them and
+boards whose cards point at them (`lib/bundle.ts` describes the format). It is how a
+board starts with real content; [docs/boards/prismo-roadmap.json](docs/boards/prismo-roadmap.json)
+is Prismo's own roadmap. Personal bundles go in `local/`, which git ignores.
 
 **One kind of thing underneath.** Tasks, events, notebooks and boards are all *items*
 with the same parts: a title, a text, a folder, a colour, links to other items, and

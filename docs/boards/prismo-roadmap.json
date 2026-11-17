@@ -1,0 +1,569 @@
+{
+  "prismo": "bundle/1",
+  "items": [
+    {
+      "ref": "built-files",
+      "kind": "task",
+      "title": "uploads, folders, search",
+      "status": "done",
+      "tags": [
+        "prismo",
+        "area:files"
+      ],
+      "body": "Uploads from the web, ShareX and the folder watcher; folders inside folders; search in names and tags; trash."
+    },
+    {
+      "ref": "built-capture",
+      "kind": "task",
+      "title": "capture: sharex and the desktop helper",
+      "status": "done",
+      "tags": [
+        "prismo",
+        "area:capture"
+      ],
+      "body": "The Windows helper with its hotkey and picker; ShareX as a custom uploader. Captures are private until shared."
+    },
+    {
+      "ref": "built-sharing",
+      "kind": "task",
+      "title": "sharing: by link and with people",
+      "status": "done",
+      "tags": [
+        "prismo",
+        "area:sharing"
+      ],
+      "body": "Links are view-only, always. Edit access only for a named Google account."
+    },
+    {
+      "ref": "built-stickers",
+      "kind": "task",
+      "title": "sticker maker",
+      "status": "done",
+      "tags": [
+        "prismo",
+        "area:files"
+      ],
+      "body": "Crop, erase colour, rub out, smart cut-out in the browser."
+    },
+    {
+      "ref": "built-room",
+      "kind": "task",
+      "title": "the room: four walls",
+      "status": "done",
+      "tags": [
+        "prismo",
+        "area:room"
+      ],
+      "body": "Ctrl and an arrow turns. Prismo painted across the Time Room, idle animation."
+    },
+    {
+      "ref": "built-time",
+      "kind": "task",
+      "title": "calendar and tasks",
+      "status": "done",
+      "tags": [
+        "prismo",
+        "area:time"
+      ],
+      "body": "Day, 3 days, week, month, months. Repeats, categories, a task list."
+    },
+    {
+      "ref": "built-lookout",
+      "kind": "task",
+      "title": "notebooks and boards",
+      "status": "done",
+      "tags": [
+        "prismo",
+        "area:lookout"
+      ],
+      "body": "Markdown + LaTeX notebooks; JSON Canvas boards; one item model under tasks, events, notebooks and boards."
+    },
+    {
+      "ref": "built-links",
+      "kind": "task",
+      "title": "share page, direct links, filters",
+      "status": "done",
+      "tags": [
+        "prismo",
+        "area:sharing"
+      ],
+      "body": "A file link opened in a browser shows the Prismo page; ?raw=1 is the file. Library filters and sorting."
+    },
+    {
+      "ref": "ops-deploy",
+      "kind": "task",
+      "title": "deploy the items update",
+      "status": "doing",
+      "tags": [
+        "prismo",
+        "area:ops"
+      ],
+      "body": "Server is live with the items model. The web app follows with `wrangler pages deploy`."
+    },
+    {
+      "ref": "ops-backups",
+      "kind": "task",
+      "title": "nightly backups",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:ops"
+      ],
+      "body": "`prismo backup` exists and keeps the newest 14; nothing runs it yet. A cron entry on the server would."
+    },
+    {
+      "ref": "ops-front",
+      "kind": "task",
+      "title": "front door check every few minutes",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:ops"
+      ],
+      "body": "A deploy of the n8n project can drop Prismo from the shared Caddyfile. `prismo front` puts it back; a cron entry would run it."
+    },
+    {
+      "ref": "ops-token",
+      "kind": "task",
+      "title": "cloudflare api token for deploys",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:ops"
+      ],
+      "body": "The wrangler login expires after about a month. A token with Pages edit rights does not."
+    },
+    {
+      "ref": "ops-actions",
+      "kind": "task",
+      "title": "deploy from github actions",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:ops"
+      ],
+      "body": "Push to main, and server and web deploy themselves, in the right order."
+    },
+    {
+      "ref": "mail-decide",
+      "kind": "task",
+      "title": "decide: which mail address, send only or read too",
+      "status": "waiting",
+      "tags": [
+        "prismo",
+        "area:wishes"
+      ],
+      "body": "Open questions:\n\n- your Gmail, or a new address on your own domain?\n- only send, or an inbox on the wall too?\n- attachments from the library?\n- any address, or a contact list?"
+    },
+    {
+      "ref": "mail",
+      "kind": "task",
+      "title": "mail on the wishes wall",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:wishes"
+      ],
+      "body": "# Mail on the wishes wall\n\nWrite a letter on the wishes wall; when it is sent it **flies out of the window on the right**.\n\nNot started; waiting on the questions in the card before it."
+    },
+    {
+      "ref": "pictures",
+      "kind": "task",
+      "title": "pictures on boards and in notebooks",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:lookout"
+      ],
+      "body": "Pick a file from the library and put it on a board or in a notebook."
+    },
+    {
+      "ref": "one-occurrence",
+      "kind": "task",
+      "title": "repeats: change one occurrence only",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:time"
+      ],
+      "body": "Today moving one appearance of a repeating event moves the whole series."
+    },
+    {
+      "ref": "sharex-off",
+      "kind": "task",
+      "title": "sharex: switch \"upload image to host\" off",
+      "status": "waiting",
+      "tags": [
+        "prismo",
+        "area:capture"
+      ],
+      "body": "The helper uploads; ShareX uploading too makes doubles (and fails with the old token)."
+    },
+    {
+      "ref": "bots",
+      "kind": "task",
+      "title": "telegram and discord bots",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:sharing"
+      ],
+      "body": "Send a sticker or a GIF from the library straight into a chat."
+    },
+    {
+      "ref": "ocr",
+      "kind": "task",
+      "title": "search the text in screenshots",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:files"
+      ],
+      "body": "Read the text in pictures once, so search finds a screenshot by what is on it."
+    },
+    {
+      "ref": "users",
+      "kind": "task",
+      "title": "more users, with quotas",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:ops"
+      ],
+      "body": "The schema is ready for more than one owner; sign-up, limits and per-user storage are not."
+    },
+    {
+      "ref": "tray",
+      "kind": "task",
+      "title": "tray icon for the desktop helper",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:capture"
+      ],
+      "body": "See that it runs, pause it, open the library."
+    },
+    {
+      "ref": "wishes-pins",
+      "kind": "task",
+      "title": "wishes wall: pinned files and a sticker fridge door",
+      "status": "todo",
+      "tags": [
+        "prismo",
+        "area:wishes"
+      ],
+      "body": "From the ideas list of the wishes wall."
+    },
+    {
+      "ref": "board",
+      "kind": "board",
+      "title": "prismo roadmap",
+      "tags": [
+        "prismo"
+      ],
+      "canvas": {
+        "nodes": [
+          {
+            "id": "intro",
+            "type": "text",
+            "x": -10,
+            "y": 0,
+            "width": 640,
+            "height": 170,
+            "color": "3",
+            "text": "# prismo roadmap\nOne column per stage. **Tick a card** when it is done, **drag** it to another column, **double-click** it for its notes and to put it on the calendar.\nArrows: what has to happen first. Hover a card to light up everything before it."
+          },
+          {
+            "id": "f-0",
+            "type": "group",
+            "label": "built",
+            "x": -10,
+            "y": 220,
+            "width": 320,
+            "height": 1100,
+            "color": "4"
+          },
+          {
+            "id": "n-built-files",
+            "type": "file",
+            "file": "ref:built-files",
+            "x": 10,
+            "y": 270,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-built-capture",
+            "type": "file",
+            "file": "ref:built-capture",
+            "x": 10,
+            "y": 400,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-built-sharing",
+            "type": "file",
+            "file": "ref:built-sharing",
+            "x": 10,
+            "y": 530,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-built-stickers",
+            "type": "file",
+            "file": "ref:built-stickers",
+            "x": 10,
+            "y": 660,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-built-room",
+            "type": "file",
+            "file": "ref:built-room",
+            "x": 10,
+            "y": 790,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-built-time",
+            "type": "file",
+            "file": "ref:built-time",
+            "x": 10,
+            "y": 920,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-built-lookout",
+            "type": "file",
+            "file": "ref:built-lookout",
+            "x": 10,
+            "y": 1050,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-built-links",
+            "type": "file",
+            "file": "ref:built-links",
+            "x": 10,
+            "y": 1180,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "f-1",
+            "type": "group",
+            "label": "keep it running",
+            "x": 330,
+            "y": 220,
+            "width": 320,
+            "height": 710,
+            "color": "5"
+          },
+          {
+            "id": "n-ops-deploy",
+            "type": "file",
+            "file": "ref:ops-deploy",
+            "x": 350,
+            "y": 270,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-ops-backups",
+            "type": "file",
+            "file": "ref:ops-backups",
+            "x": 350,
+            "y": 400,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-ops-front",
+            "type": "file",
+            "file": "ref:ops-front",
+            "x": 350,
+            "y": 530,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-ops-token",
+            "type": "file",
+            "file": "ref:ops-token",
+            "x": 350,
+            "y": 660,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-ops-actions",
+            "type": "file",
+            "file": "ref:ops-actions",
+            "x": 350,
+            "y": 790,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "f-2",
+            "type": "group",
+            "label": "next",
+            "x": 670,
+            "y": 220,
+            "width": 320,
+            "height": 710,
+            "color": "2"
+          },
+          {
+            "id": "n-mail-decide",
+            "type": "file",
+            "file": "ref:mail-decide",
+            "x": 690,
+            "y": 270,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-mail",
+            "type": "file",
+            "file": "ref:mail",
+            "x": 690,
+            "y": 400,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-pictures",
+            "type": "file",
+            "file": "ref:pictures",
+            "x": 690,
+            "y": 530,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-one-occurrence",
+            "type": "file",
+            "file": "ref:one-occurrence",
+            "x": 690,
+            "y": 660,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-sharex-off",
+            "type": "file",
+            "file": "ref:sharex-off",
+            "x": 690,
+            "y": 790,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "f-3",
+            "type": "group",
+            "label": "later",
+            "x": 1010,
+            "y": 220,
+            "width": 320,
+            "height": 710,
+            "color": "6"
+          },
+          {
+            "id": "n-bots",
+            "type": "file",
+            "file": "ref:bots",
+            "x": 1030,
+            "y": 270,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-ocr",
+            "type": "file",
+            "file": "ref:ocr",
+            "x": 1030,
+            "y": 400,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-users",
+            "type": "file",
+            "file": "ref:users",
+            "x": 1030,
+            "y": 530,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-tray",
+            "type": "file",
+            "file": "ref:tray",
+            "x": 1030,
+            "y": 660,
+            "width": 280,
+            "height": 110
+          },
+          {
+            "id": "n-wishes-pins",
+            "type": "file",
+            "file": "ref:wishes-pins",
+            "x": 1030,
+            "y": 790,
+            "width": 280,
+            "height": 110
+          }
+        ],
+        "edges": [
+          {
+            "id": "e-mail-decide-mail",
+            "fromNode": "n-mail-decide",
+            "fromSide": "bottom",
+            "toNode": "n-mail",
+            "toSide": "top",
+            "toEnd": "arrow"
+          },
+          {
+            "id": "e-ops-token-ops-actions",
+            "fromNode": "n-ops-token",
+            "fromSide": "right",
+            "toNode": "n-ops-actions",
+            "toSide": "left",
+            "toEnd": "arrow"
+          },
+          {
+            "id": "e-built-lookout-pictures",
+            "fromNode": "n-built-lookout",
+            "fromSide": "right",
+            "toNode": "n-pictures",
+            "toSide": "left",
+            "toEnd": "arrow"
+          },
+          {
+            "id": "e-built-time-one-occurrence",
+            "fromNode": "n-built-time",
+            "fromSide": "right",
+            "toNode": "n-one-occurrence",
+            "toSide": "left",
+            "toEnd": "arrow"
+          },
+          {
+            "id": "e-built-room-wishes-pins",
+            "fromNode": "n-built-room",
+            "fromSide": "right",
+            "toNode": "n-wishes-pins",
+            "toSide": "left",
+            "toEnd": "arrow"
+          }
+        ]
+      }
+    }
+  ]
+}

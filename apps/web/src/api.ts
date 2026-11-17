@@ -83,8 +83,12 @@ export interface Item {
   /** Length of a timed item. */
   minutes: number | null
   repeat: Repeat | null
+  /** The last day a repeat may fall on; null: it goes on. */
+  repeat_until: string | null
   /** 1..6, the JSON Canvas colours, painted by the theme. */
   color: number | null
+  /** Categories: "dsai" is one, "course:mai3" a facet inside it. */
+  tags: string[]
   /** Counts changes to the body or canvas. */
   version: number
   created_at: string
@@ -115,7 +119,9 @@ export type ItemChange = Partial<{
   end_date: string | null
   minutes: number | null
   repeat: Repeat | null
+  repeat_until: string | null
   color: number | null
+  tags: string[]
   trashed: boolean
   /** The version read; a body or canvas change is refused if it moved on. */
   version: number

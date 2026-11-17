@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { Item } from '../api'
 import { addDays, DAYS, iso, monthGrid, MONTHS, occurrences, parse, plusDays, short, today, weekday } from '../lib/days'
+import { categories, hidden, NONE, setHidden, shown, type Hidden } from '../lib/categories'
 import { openItem, titleOf, useItemChanges, useItems } from '../lib/items'
 import { facing, WALLS } from '../lib/room'
 import { typing } from '../lib/spatial'
@@ -99,7 +100,10 @@ export function TimeWall() {
     return { days: list, from: list[0], to: list[n - 1], title: t }
   }, [anchor, view, lay.count])
 
-  const { data: items = [], isError } = useItems({ from, to, someday: true })
+  const { data: all = [], isError } = useItems({ from, to, someday: true })
+  // What the category filter lets through.
+  const off = useStore(hidden)
+  const items = useMemo(() => all.filter((it) => shown(it, off)), [all, off])
   const occ = useMemo(() => occurrences(items, from, to), [items, from, to])
 
   const step = (dir: 1 | -1) => {
@@ -137,6 +141,7 @@ export function TimeWall() {
     <section className="time-wall" aria-label="time wall: calendar and tasks">
       <aside className="time-side panel px">
         <MiniMonth anchor={anchor} onPick={setAnchor} items={items} />
+        <Categories inRange={all} />
         <TaskList items={items} anchor={anchor} />
       </aside>
 
@@ -319,6 +324,81 @@ function TaskList({ items, anchor }: { items: Item[]; anchor: string }) {
         <KeyCap cap="m" />
         <KeyCap cap="g" /> views · <KeyCap cap="t" /> today · <KeyCap cap="c" /> new
       </p>
+    </div>
+  )
+}
+
+/**
+ * The calendar's categories, like Google's list of calendars: each can be
+ * switched off, or shown alone; open one to switch off parts of it (a
+ * course, a type). Built from the items' tags, nothing to set up.
+ */
+function Categories({ inRange }: { inRange: Item[] }) {
+  // Categories of everything, not only of what this range shows, so one
+  // that was switched off does not vanish from the list.
+  const { data: recent = [] } = useItems({})
+  const cats = useMemo(() => {
+    const seen = new Map<string, Item>()
+    for (const it of [...recent, ...inRange]) seen.set(it.id, it)
+    return categories([...seen.values()])
+  }, [recent, inRange])
+  const off = useStore(hidden)
+  const [open, setOpen] = useState<string | null>(null)
+  if (cats.length === 0 || (cats.length === 1 && cats[0].tag === NONE)) return null
+
+  const toggle = (list: keyof Hidden, key: string) => {
+    const has = off[list].includes(key)
+    setHidden({ ...off, [list]: has ? off[list].filter((k) => k !== key) : [...off[list], key] })
+  }
+  const only = (tag: string) => setHidden({ tops: cats.map((c) => c.tag).filter((t) => t !== tag), facets: off.facets.filter((f) => f.startsWith(`${tag}|`)) })
+  const any = off.tops.length > 0 || off.facets.length > 0
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between">
+        <h3 className="section-title uppercase !p-0">categories</h3>
+        {any && (
+          <button type="button" className="chip" onClick={() => setHidden({ tops: [], facets: [] })}>
+            all
+          </button>
+        )}
+      </div>
+      <ul className="cats">
+        {cats.map((c) => {
+          const on = !off.tops.includes(c.tag)
+          const name = c.tag === NONE ? 'no category' : c.tag
+          return (
+            <li key={c.tag || '-'}>
+              <div className="cat-row">
+                <input type="checkbox" className="check check-sm" checked={on} aria-label={`show ${name}`} onChange={() => toggle('tops', c.tag)} />
+                <button type="button" className="cat-name" aria-expanded={c.facets.length ? open === c.tag : undefined} onClick={() => setOpen(open === c.tag ? null : c.tag)}>
+                  {name}
+                  {c.facets.length > 0 && <span className="dim"> {open === c.tag ? 'v' : '>'}</span>}
+                </button>
+                <button type="button" className="chip cat-only" onClick={() => only(c.tag)} title={`show only ${name}`}>
+                  only
+                </button>
+              </div>
+              {open === c.tag &&
+                c.facets.map((f) => (
+                  <div key={f.key} className="cat-facet">
+                    <span className="label">{f.key}</span>
+                    <div className="flex flex-wrap gap-1">
+                      {f.values.map((v) => {
+                        const key = `${c.tag}|${f.key}:${v.value}`
+                        return (
+                          <button key={v.value} type="button" className="chip" aria-pressed={!off.facets.includes(key)} onClick={() => toggle('facets', key)} title={`${v.count} items`}>
+                            {v.value}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }

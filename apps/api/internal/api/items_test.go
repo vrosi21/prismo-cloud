@@ -82,3 +82,36 @@ func TestNotebookKeepsNoStatus(t *testing.T) {
 		t.Fatal("colour 7 accepted")
 	}
 }
+
+func TestRepeatStopsAtItsLastDay(t *testing.T) {
+	var f store.ItemFields
+	applyJSON(t, &f, `{"kind":"task","title":"lab report","date":"2026-11-22","repeat":"weekly","repeat_until":"2026-11-29"}`)
+	applyJSON(t, &f, `{"status":"done"}`)
+	if *f.Date != "2026-11-29" || *f.Status != "todo" {
+		t.Fatalf("first tick: %v %v", *f.Date, *f.Status)
+	}
+	applyJSON(t, &f, `{"status":"done"}`)
+	if *f.Date != "2026-11-29" || *f.Status != "done" || f.DoneAt == nil {
+		t.Fatalf("last tick should stay done on its day: %v %v", *f.Date, *f.Status)
+	}
+	if msg := applyJSON(t, &f, `{"repeat_until":"2026-11-01"}`); msg == "" {
+		t.Fatal("an end before the start was accepted")
+	}
+	applyJSON(t, &f, `{"repeat":null}`)
+	if f.RepeatUntil != nil {
+		t.Fatal("no repeat, no end of it")
+	}
+	if msg := applyJSON(t, &f, `{"repeat_until":"2026-12-31"}`); msg == "" {
+		t.Fatal("an end without a repeat was accepted")
+	}
+}
+
+func TestTagsAreCleaned(t *testing.T) {
+	var f store.ItemFields
+	if msg := applyJSON(t, &f, `{"kind":"event","title":"x","date":"2026-11-20","tags":[" DSAI ","course:MAI3","dsai",""]}`); msg != "" {
+		t.Fatal(msg)
+	}
+	if len(f.Tags) != 2 || f.Tags[0] != "dsai" || f.Tags[1] != "course:mai3" {
+		t.Fatalf("%q", f.Tags)
+	}
+}

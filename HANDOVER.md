@@ -234,6 +234,25 @@ screen switching camera feeds: no swing, at most a moment of static.
   Smoke test: 187 passed (items replace the tasks checks). Checked in the
   mock in all three themes.
 
+- Step 14 (2026-11-17, asked for by the user: a Prismo roadmap board "to see
+  some content before i write my own", a DSAI board with a card per course
+  and its labs, tests, exams..., calendar filters by category with course
+  and type inside). Migration 0010: `items.tags` (text[], GIN) and
+  `repeat_until`. Tags are the categories: a plain tag is one, `key:value`
+  a facet inside it (`lib/categories.ts`); the time wall lists them with
+  on/off, "only", and facet chips, remembered in localStorage. Ticking off
+  the last repeat before `repeat_until` leaves it done in place. Bundles
+  (`lib/bundle.ts`, "import" on the lookout): items with local refs,
+  links, boards whose file nodes say `ref:<ref>`. Bundles written:
+  `docs/boards/prismo-roadmap.json` (committed) and `local/dsai.json`
+  (git-ignored: 7 course notebooks with grading, labs as weekly events at
+  17:00 for 90 min, lab reports as weekly tasks due the day before the
+  next lab at 23:00, tests, midterms on the dates given, undated items for
+  what is not known yet; colour by type). Both imported in the mock and
+  checked. `server.sh` finds itself after its `cd` (the deploy ended with
+  "No such file or directory" and skipped `prismo front`). Not run: the
+  smoke test for 0010 (Docker Desktop's engine answered 500 all session).
+
 ## Ideas for next time
 
 - **Mail on the wishes wall** (the user's plan, 2026-11-16): a mail

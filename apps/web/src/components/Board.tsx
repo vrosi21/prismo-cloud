@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import type { Canvas, CanvasEdge, CanvasNode, Item, Side } from '../api'
 import { short } from '../lib/days'
 import { COLORS, openAnywhere, openItem, STATUSES, titleOf, useItemChanges, useItems } from '../lib/items'
-import { miniMarkdown } from '../lib/minimd'
+import { miniMarkdown, plainExcerpt } from '../lib/minimd'
 import { log } from '../lib/log'
 
 // A board: an endless canvas of notes, cards, frames and arrows, like Miro,
@@ -750,7 +750,14 @@ function ItemCard({ it, onToggle }: { it: Item | undefined; onToggle: (it: Item)
       <div className="board-card-top">
         <span className="kind-tag">{it.kind}</span>
         {status && <span className="status-pill" data-status={status.id}>{status.label}</span>}
-        {it.date && <span className="dim">{short(it.date)}{it.time ? ` ${it.time}` : ''}</span>}
+        {it.date && <span className="dim">{short(it.date)}{it.time ? ` ${it.time}` : ''}{it.repeat ? ` · ${it.repeat}` : ''}</span>}
+        {(it.tags ?? [])
+          .filter((t) => t.startsWith('type:'))
+          .map((t) => (
+            <span key={t} className="tag-chip">
+              {t.slice(5)}
+            </span>
+          ))}
       </div>
       <div className="flex items-start gap-2">
         {it.status && (
@@ -765,7 +772,7 @@ function ItemCard({ it, onToggle }: { it: Item | undefined; onToggle: (it: Item)
         )}
         <b className="board-card-title">{titleOf(it)}</b>
       </div>
-      {it.excerpt && <p className="board-card-text">{it.excerpt.replace(/[#*`$>\-[\]]/g, '').slice(0, 140)}</p>}
+      {it.excerpt && <p className="board-card-text">{plainExcerpt(it.excerpt)}</p>}
     </div>
   )
 }

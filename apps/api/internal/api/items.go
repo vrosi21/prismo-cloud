@@ -70,7 +70,9 @@ type itemRequest struct {
 	EndDate      optionalString  `json:"end_date"`
 	Minutes      optionalInt     `json:"minutes"`
 	Repeat       optionalString  `json:"repeat"`
+	RepeatUntil  optionalString  `json:"repeat_until"`
 	Color        optionalInt     `json:"color"`
+	Tags         *[]string       `json:"tags"`
 	Trashed      *bool           `json:"trashed"`
 	// The version the caller read; a change to the body or the canvas is
 	// refused (409) if someone changed them since. 0 skips the check.
@@ -112,6 +114,7 @@ func (req *itemRequest) apply(f *store.ItemFields, now time.Time) string {
 	setStr(req.Time, &f.Time)
 	setStr(req.EndDate, &f.EndDate)
 	setStr(req.Repeat, &f.Repeat)
+	setStr(req.RepeatUntil, &f.RepeatUntil)
 	if req.Minutes.Set {
 		f.Minutes = req.Minutes.Value
 	}
@@ -121,11 +124,20 @@ func (req *itemRequest) apply(f *store.ItemFields, now time.Time) string {
 	if req.Trashed != nil {
 		f.Trashed = *req.Trashed
 	}
+	if req.Tags != nil {
+		tags := cleanTags(*req.Tags)
+		if tags == nil {
+			return "a tag is at most 40 characters, at most 30 of them"
+		}
+		f.Tags = tags
+	}
 
 	// Asking for a time (or a length, a last day, a repeat) on something
 	// with no day is a mistake worth saying; taking the day away quietly
 	// takes them with it.
 	switch {
+	case f.Repeat == nil && req.RepeatUntil.Value != nil:
+		return "an end of the repeat needs a repeat"
 	case f.Date == nil && (req.Time.Value != nil || req.EndDate.Value != nil || req.Repeat.Value != nil):
 		return "a time, a last day or a repeat needs a day"
 	case f.Time == nil && req.Minutes.Value != nil:
@@ -149,6 +161,9 @@ func (req *itemRequest) apply(f *store.ItemFields, now time.Time) string {
 	if f.Date == nil {
 		f.Time, f.EndDate, f.Repeat = nil, nil, nil
 	}
+	if f.Repeat == nil {
+		f.RepeatUntil = nil
+	}
 	if f.Time == nil {
 		f.Minutes = nil
 	}
@@ -158,7 +173,7 @@ func (req *itemRequest) apply(f *store.ItemFields, now time.Time) string {
 
 	// A repeating task ticked off moves on to its next day instead.
 	if f.Status != nil && *f.Status == "done" && f.Repeat != nil && f.Date != nil {
-		advance(f)
+		advance(f) // the last one, past repeat_until, just stays done
 	}
 	switch {
 	case f.Status != nil && *f.Status == "done":
@@ -191,6 +206,10 @@ func (req *itemRequest) apply(f *store.ItemFields, now time.Time) string {
 		return "a length is 1 minute to 7 days"
 	case f.Repeat != nil && !itemRepeats[*f.Repeat]:
 		return "repeat is daily, weekly, monthly or yearly"
+	case f.RepeatUntil != nil && !validDay(*f.RepeatUntil):
+		return "a day looks like 2026-11-01"
+	case f.RepeatUntil != nil && *f.RepeatUntil < *f.Date:
+		return "the repeat ends before it starts"
 	case f.Color != nil && (*f.Color < 1 || *f.Color > 6):
 		return "colour is 1 to 6"
 	case f.CollectionID != nil && !isUUID(*f.CollectionID):
@@ -234,6 +253,9 @@ func advance(f *store.ItemFields) {
 		next = from.AddDate(1, 0, 0)
 	}
 	day := next.Format(dayLayout)
+	if f.RepeatUntil != nil && day > *f.RepeatUntil {
+		return
+	}
 	if f.EndDate != nil {
 		if end, err := time.Parse(dayLayout, *f.EndDate); err == nil {
 			e := end.Add(next.Sub(from)).Format(dayLayout)
