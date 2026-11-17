@@ -308,9 +308,11 @@ screen switching camera feeds: no swing, at most a moment of static.
   - `/prismo` skill (`tools/prismo-skill`, `scripts/install-skill.ps1`),
     installed on the user's PC without a token; secretary instructions in
     `C:\Projects\prismo-secretary\CLAUDE.md`.
-  Waiting on the user: one manual `deploy/deploy.sh` (installs `prismo ci`,
-  ships 0011 + 0012), `setup-ci.sh` with a Cloudflare token, a plan token in
-  Settings + `install-skill.ps1`, then starting the secretary session.
+  2026-11-17 late: the user ran `deploy/deploy.sh` (bb11ac6: 0011 + 0012
+  live) and `setup-ci.sh` (secrets set, DEPLOY_ENABLED on; its self-test
+  warned, but the server line is `restrict,command=".../prismo ci"`).
+  Waiting on the user: a plan token in Settings + `install-skill.ps1`, then
+  starting the secretary session.
 
 ## Ideas for next time
 
