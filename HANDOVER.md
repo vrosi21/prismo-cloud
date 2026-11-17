@@ -294,6 +294,24 @@ screen switching camera feeds: no swing, at most a moment of static.
   already only copying and saving. The helper on the user's PC was
   rebuilt, swapped and restarted with the new shortcut arguments.
 
+- Step 18 (2026-11-17, user: "do devops for this", Claude sessions writing
+  to Prismo, a secretary session, a ledger, a global /prismo skill, folder
+  delete in the side panel, right-click menus; plan in
+  ~/.claude/plans/unified-sleeping-forest.md). Done:
+  - right-click menus (`components/Menus.tsx`, `lib/menu.ts`) and the
+    folder strip shared as `components/FolderPanel.tsx` (48f071a);
+  - CI (`.github/workflows/ci.yml`, green on GitHub): Go, web, whole stack;
+    deploy jobs gated by `DEPLOY_ENABLED`; `prismo ci` on the server (forced
+    command, backup, load, up, roll back); `deploy/setup-ci.sh` (9bcff93);
+  - planner token scope + ledger (migration 0012, `api/ledger.go`,
+    `components/Ledger.tsx`), smoke 209/209 (41bb843);
+  - `/prismo` skill (`tools/prismo-skill`, `scripts/install-skill.ps1`),
+    installed on the user's PC without a token; secretary instructions in
+    `C:\Projects\prismo-secretary\CLAUDE.md`.
+  Waiting on the user: one manual `deploy/deploy.sh` (installs `prismo ci`,
+  ships 0011 + 0012), `setup-ci.sh` with a Cloudflare token, a plan token in
+  Settings + `install-skill.ps1`, then starting the secretary session.
+
 ## Ideas for next time
 
 - **Mail on the wishes wall** (the user's plan, 2026-11-16): a mail

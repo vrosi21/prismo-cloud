@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react'
+
+// Changes shown in a block before "more".
+const SHOWN = 8
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { api, type LedgerEntry } from '../api'
 import { openItem } from '../lib/items'
@@ -46,6 +49,7 @@ function when(at: string): string {
 
 export function Ledger() {
   const [who, setWho] = useState<string | null>(null)
+  const [open, setOpen] = useState<Set<string>>(new Set())
   const query = useInfiniteQuery({
     queryKey: ['ledger', who],
     queryFn: ({ pageParam }) => api.ledger({ before: pageParam, who: who ?? undefined, limit: 200 }),
@@ -96,7 +100,7 @@ export function Ledger() {
             ))}
             {b.changes.length > 0 && (
               <ul className="ledger-changes">
-                {b.changes.map((c) => (
+                {(open.has(b.changes[0].id) ? b.changes : b.changes.slice(0, SHOWN)).map((c) => (
                   <li key={c.id}>
                     {c.items[0] && !c.message.startsWith('trashed') && !c.message.startsWith('deleted') ? (
                       <button type="button" className="link-btn text-left" onClick={() => openItem.set(c.items[0])} title={when(c.at)}>
@@ -107,6 +111,13 @@ export function Ledger() {
                     )}
                   </li>
                 ))}
+                {b.changes.length > SHOWN && !open.has(b.changes[0].id) && (
+                  <li>
+                    <button type="button" className="link-btn" onClick={() => setOpen(new Set([...open, b.changes[0].id]))}>
+                      {b.changes.length - SHOWN} more
+                    </button>
+                  </li>
+                )}
               </ul>
             )}
           </li>

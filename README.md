@@ -231,7 +231,19 @@ stands for the SSH address (`user@host`).
   reached around Cloudflare.
 - Everything runs in Docker as an ordinary user. Nothing needs root.
 
-First time, and after changing anything under `deploy/` or `apps/api/`:
+**Deploying is GitHub Actions' job** ([.github/workflows/ci.yml](.github/workflows/ci.yml)):
+every push and pull request is tested (Go, the web app, and the whole stack end to end
+with `scripts/smoke.mjs`); a push to `main` that passes is deployed, the server first
+(a database backup, the new image, back to the old one if it does not come up), then
+the web app. Switch it on once, with a Cloudflare API token that may edit Pages at hand:
+
+```bash
+bash deploy/setup-ci.sh <server> <owner/repo>
+```
+
+The CI's SSH key can only run `prismo ci`, which accepts one request: "deploy this
+image". So changes to `deploy/compose.yaml` or `deploy/server.sh` still go by hand, and
+so does the very first deploy:
 
 ```bash
 bash deploy/deploy.sh <server>
@@ -272,6 +284,32 @@ Uploaded files are in the Docker volume `prismo_garage-data` and are **not** in 
 Limit worth knowing: uploads through the public address (ShareX, the folder watcher)
 pass through Cloudflare, which caps a request at 100 MB on the free plan. Uploads from
 the web app go straight to the storage name and are only capped by `MAX_UPLOAD_MB`.
+
+## Claude sessions: the /prismo skill
+
+Claude Code sessions on this PC can read and change the planner (tasks, events,
+notebooks, boards, folders, pins) through a **plan token**: Settings -> new token ->
+"plan: for claude sessions". It reaches the planner and the ledger and nothing else: no
+files, no uploads, no other tokens, no deleting for good. Settings shows the line that
+installs the skill with it:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\install-skill.ps1 -Url https://<your site> -Token prismo_...
+```
+
+It copies [tools/prismo-skill](tools/prismo-skill) to `~/.claude/skills/prismo` and keeps
+the token in your Windows user's environment. Then, in any session: `/prismo write a
+roadmap for this project in folder projects/x`. The skill uses `prismo.mjs` (`list`,
+`create`, `patch`, `import <bundle> --folder a/b`, `log`, ...; no dependencies). Run the
+script again after pulling a newer skill.
+
+**The ledger** (lookout wall, under "pinned") lists what sessions changed: the server
+writes a line for every change made through a token, named after the session
+(`X-Prismo-Session`), and a session adds one note per batch saying what it did.
+
+**The secretary** is a session of its own, in `C:\Projects\prismo-secretary` (its
+`CLAUDE.md` says what it does): it keeps Prismo tidy from what you tell it, and other
+sessions hand it work by name ("prismo secretary").
 
 ## Capture
 
