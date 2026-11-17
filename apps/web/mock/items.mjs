@@ -156,7 +156,23 @@ export function itemRoutes({ uuid, body, collections }) {
 
   const find = (id) => items.find((x) => x.id === id)
 
+  // The ledger, as Claude sessions would have filled it.
+  const ago = (min) => new Date(Date.now() - min * 60_000).toISOString()
+  const ledger = [
+    { id: uuid(), at: ago(3), who: 'prismo secretary', kind: 'note', message: 'moved the dentist to thursday and pinned it under "this week", as asked.', items: [dentist.id] },
+    { id: uuid(), at: ago(4), who: 'prismo secretary', kind: 'change', message: 'changed task "dentist": day, pinned in this week', items: [dentist.id] },
+    { id: uuid(), at: ago(95), who: 'dsai-schedule', kind: 'note', message: 'added the rf midterm and the mai3 test 3 date from the course page.', items: [] },
+    { id: uuid(), at: ago(96), who: 'dsai-schedule', kind: 'change', message: 'made task "rf midterm" on 2026-12-01', items: [] },
+    { id: uuid(), at: ago(97), who: 'dsai-schedule', kind: 'change', message: 'changed task "mai3 test 3": day 2026-12-11', items: [] },
+  ]
+
   return [
+    ['GET', /^\/v1\/ledger$/, (req, m, q) => [200, { entries: ledger.filter((e) => !q.get('who') || e.who === q.get('who')) }]],
+    ['POST', /^\/v1\/ledger$/, async (req) => {
+      const b = await body(req)
+      ledger.unshift({ id: uuid(), at: new Date().toISOString(), who: b.who || 'you', kind: 'note', message: b.message, items: b.items ?? [] })
+      return [204]
+    }],
     ['GET', /^\/v1\/items$/, (req, m, q) => {
       const from = q.get('from')
       const to = q.get('to')

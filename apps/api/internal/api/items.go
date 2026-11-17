@@ -472,6 +472,7 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	s.record(r, describeNew(it), it.ID)
 	writeJSON(w, http.StatusCreated, it)
 }
 
@@ -488,6 +489,13 @@ func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 	// Only into one of the owner's own folders.
 	if req.CollectionID.Set && !s.checkCollection(w, r, owner, req.CollectionID.Value) {
 		return
+	}
+	// What it was, for the ledger line of a change made through a token.
+	var before *store.Item
+	if who(r).Token != nil {
+		if b, err := s.store.GetItem(r.Context(), owner, id); err == nil {
+			before = &b
+		}
 	}
 	var bad string
 	it, err := s.store.UpdateItem(r.Context(), owner, id, req.Version, func(f *store.ItemFields) error {
@@ -507,6 +515,11 @@ func (s *Server) updateItem(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "changed elsewhere since you opened it", "item": current})
 	case !s.itemError(w, r, err):
+		if before != nil {
+			if msg := describeChange(*before, it, deref(req.Status.Value) == "done"); msg != "" {
+				s.record(r, msg, it.ID)
+			}
+		}
 		writeJSON(w, http.StatusOK, it)
 	}
 }
@@ -521,17 +534,28 @@ func (s *Server) deleteItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	owner := who(r).UserID
+	permanent := r.URL.Query().Get("permanent") == "1"
+	if permanent && plannerToken(r) {
+		writeErr(w, http.StatusForbidden, "this token may move things to the trash, not delete them for good")
+		return
+	}
 	var err error
-	if r.URL.Query().Get("permanent") == "1" {
+	var it store.Item
+	if permanent {
 		err = s.store.DeleteItem(r.Context(), owner, id)
 	} else {
-		_, err = s.store.UpdateItem(r.Context(), owner, id, 0, func(f *store.ItemFields) error {
+		it, err = s.store.UpdateItem(r.Context(), owner, id, 0, func(f *store.ItemFields) error {
 			f.Trashed = true
 			return nil
 		})
 	}
 	if s.itemError(w, r, err) {
 		return
+	}
+	if permanent {
+		s.record(r, "deleted an item for good", id)
+	} else {
+		s.record(r, "trashed "+named(it), id)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -554,6 +578,7 @@ func (s *Server) linkItem(w http.ResponseWriter, r *http.Request) {
 	if s.itemError(w, r, s.store.LinkItems(r.Context(), who(r).UserID, id, req.To)) {
 		return
 	}
+	s.recordLink(r, "linked", id, req.To)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -570,5 +595,6 @@ func (s *Server) unlinkItem(w http.ResponseWriter, r *http.Request) {
 	if s.itemError(w, r, s.store.UnlinkItems(r.Context(), who(r).UserID, id, other)) {
 		return
 	}
+	s.recordLink(r, "unlinked", id, other)
 	w.WriteHeader(http.StatusNoContent)
 }

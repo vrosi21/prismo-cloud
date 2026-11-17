@@ -16,6 +16,10 @@ import { LookoutTree } from './LookoutTree'
 import { useItemEntries } from './Menus'
 import { openMenu } from '../lib/menu'
 import { Pinned } from './Pinned'
+import { Ledger } from './Ledger'
+
+/** What the lookout shows for the ledger instead of an item. */
+export const LEDGER = 'ledger'
 import { Cube } from './sprites'
 
 const Board = lazy(() => import('./Board'))
@@ -112,6 +116,12 @@ export function LookoutWall() {
           </span>
           <span className="min-w-0 flex-1 truncate">the pinned board</span>
         </button>
+        <button type="button" className="lookout-row" aria-current={open === LEDGER || undefined} onClick={() => lookout.set(LEDGER)} data-nav-item>
+          <span className="kind-tag" data-kind="pinned">
+            ledger
+          </span>
+          <span className="min-w-0 flex-1 truncate">what claude sessions changed</span>
+        </button>
         <input className="field" placeholder="find in titles and text" value={q} onChange={(e) => setQ(e.target.value)} aria-label="find" />
         {isPending && <Cube size={32} label="loading" />}
         {!isPending && q.trim() ? (
@@ -142,7 +152,9 @@ export function LookoutWall() {
       </aside>
 
       <div className="lookout-main">
-        {open ? (
+        {open === LEDGER ? (
+          <Ledger />
+        ) : open ? (
           <Page key={open} id={open} />
         ) : (
           <Pinned />

@@ -134,6 +134,7 @@ const SCOPE_TEXT: Record<Token['scope'], string> = {
   upload: 'may add files',
   device: 'may add and look',
   full: 'may do everything',
+  planner: 'claude: tasks, events, notebooks, boards',
 }
 
 const VISIBILITY_TEXT: Record<Visibility, string> = {
@@ -223,11 +224,15 @@ function CaptureClients({ publicUrl }: { publicUrl: string }) {
         &gt; the desktop helper (windows) uploads every capture by itself, and on a hotkey pastes a sticker or gif from here into any
         chat. its token has to be one that may add files and look.
         <br />
+        &gt; a "plan" token is for claude sessions (the /prismo skill): it reads and changes tasks, events, notebooks and boards, makes
+        folders and writes the ledger, and nothing else: no files, no other tokens.
+        <br />
         &gt; "new files" is what happens to a file that program sends: private stays with you; anyone with link can be opened by whoever
         gets the link.
       </p>
 
-      {fresh && (
+      {fresh && fresh.token.scope === 'planner' && <FreshPlanner publicUrl={publicUrl} secret={fresh.secret} name={fresh.token.name} onDone={() => setFresh(null)} />}
+      {fresh && fresh.token.scope !== 'planner' && (
         <FreshToken publicUrl={publicUrl} secret={fresh.secret} name={fresh.token.name} mayLook={fresh.token.scope !== 'upload'} onDone={() => setFresh(null)} />
       )}
 
@@ -270,6 +275,7 @@ function CaptureClients({ publicUrl }: { publicUrl: string }) {
             <option value="device">add files and look</option>
             <option value="upload">add files</option>
             <option value="full">do everything</option>
+            <option value="planner">plan: for claude sessions</option>
           </select>
         </label>
         <label>
@@ -360,6 +366,37 @@ function FreshToken({ publicUrl, secret, name, mayLook, onDone }: FreshTokenProp
           onClick={() => copy('helper install command', helperCommand)}
         >
           copy helper install command
+        </button>
+        <button type="button" className="btn" onClick={onDone}>
+          done
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** A planner token, just made: the line that installs the /prismo skill with it. */
+function FreshPlanner({ publicUrl, secret, name, onDone }: { publicUrl: string; secret: string; name: string; onDone: () => void }) {
+  const command = `powershell -ExecutionPolicy Bypass -File scripts\\install-skill.ps1 -Url ${publicUrl} -Token ${secret}`
+  const copy = async (label: string, text: string) => {
+    const ok = await copyText(text)
+    log(ok ? 'ok' : 'err', ok ? `${label} copied` : 'clipboard refused')
+  }
+  return (
+    <div className="px-accent flex flex-col gap-4 bg-panel-2 p-4">
+      <p>
+        &gt; token for "{name}" created. <span className="text-danger">it is shown only now.</span>
+      </p>
+      <p className="dim">
+        &gt; run the install line in a terminal opened in the prismo-cloud folder. it puts the /prismo skill in ~/.claude/skills and keeps the
+        token in your windows user's environment, where claude sessions on this pc find it. revoke it here any time.
+      </p>
+      <div className="flex flex-wrap gap-x-3 gap-y-4">
+        <button type="button" className="btn btn-accent" onClick={() => copy('skill install command', command)}>
+          copy skill install command
+        </button>
+        <button type="button" className="btn" onClick={() => copy('token', secret)}>
+          copy token
         </button>
         <button type="button" className="btn" onClick={onDone}>
           done

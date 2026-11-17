@@ -628,6 +628,50 @@ for (const it of [dentist, notes, board, trip, standup]) {
   await call('DELETE', `/v1/items/${it.id}?permanent=1`)
 }
 
+// --- planner token and ledger ---
+r = await call('POST', '/v1/tokens', { body: { name: 'claude', scope: 'planner' } })
+const planTok = r.json?.secret
+check('create planner token', r.status === 201 && planTok?.startsWith('prismo_'), r.text.slice(0, 120))
+const as = { 'X-Prismo-Session': 'secretary' }
+r = await call('POST', '/v1/items', { token: planTok, headers: as, body: { kind: 'task', title: 'from a session', date: '2026-12-01', time: '10:00' } })
+const planned = r.json
+check('a planner token makes items', r.status === 201, r.text.slice(0, 160))
+r = await call('PATCH', `/v1/items/${planned?.id}`, { token: planTok, headers: as, body: { date: '2026-12-02', tags: ['pin:labs'] } })
+check('and changes them', r.status === 200 && r.json?.date === '2026-12-02')
+r = await call('POST', '/v1/collections', { token: planTok, body: { name: 'from claude' } })
+check('and makes folders', r.status === 201)
+r = await call('GET', '/v1/items?limit=5', { token: planTok })
+check('and reads items', r.status === 200)
+for (const [m, p] of [['GET', '/v1/assets'], ['GET', '/v1/me'], ['POST', '/v1/tokens'], ['GET', '/v1/shares']]) {
+  r = await call(m, p, { token: planTok, body: m === 'POST' ? { name: 'x', scope: 'full' } : undefined })
+  check(`a planner token is refused ${m} ${p}`, r.status === 403 || r.status === 401, String(r.status))
+}
+r = await call('POST', '/v1/upload', { token: planTok, form: multipart('nope.png', media('t.png')) })
+check('a planner token cannot upload', r.status === 403, String(r.status))
+r = await call('DELETE', `/v1/items/${planned?.id}`, { token: planTok, headers: as })
+check('it may trash', r.status === 204)
+r = await call('DELETE', `/v1/items/${planned?.id}?permanent=1`, { token: planTok })
+check('but not delete for good', r.status === 403, String(r.status))
+r = await call('POST', '/v1/ledger', { token: planTok, headers: as, body: { message: 'moved the session task to tuesday, then dropped it', items: [planned?.id] } })
+check('a session leaves a note', r.status === 204, r.text)
+r = await call('GET', '/v1/ledger')
+const lines = r.json?.entries ?? []
+check(
+  'the ledger lists the changes and the note, newest first',
+  r.status === 200 &&
+    lines[0]?.kind === 'note' && lines[0].who === 'secretary' &&
+    lines.some((e) => e.kind === 'change' && e.message === 'made task "from a session" on 2026-12-01 10:00') &&
+    lines.some((e) => e.message === 'changed task "from a session": day 2026-12-02, pinned in labs') &&
+    lines.some((e) => e.message === 'made folder "from claude"' && e.who === 'claude') &&
+    lines.some((e) => e.message === 'trashed task "from a session"'),
+  JSON.stringify(lines.map((e) => `${e.who}: ${e.message}`)),
+)
+r = await call('PATCH', `/v1/items/${planned?.id}`, { body: { trashed: false } })
+r = await call('GET', '/v1/ledger')
+check('changes in the browser are not listed', r.json?.entries.length === lines.length)
+await call('DELETE', `/v1/items/${planned?.id}`)
+await call('DELETE', `/v1/items/${planned?.id}?permanent=1`)
+
 // --- logout ---
 r = await call('POST', '/v1/auth/logout')
 r = await call('GET', '/v1/me')

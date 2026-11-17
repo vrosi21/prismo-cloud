@@ -217,8 +217,8 @@ func (s *Server) createToken(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "name is required (80 characters at most)")
 		return
 	}
-	if req.Scope != "upload" && req.Scope != "device" && req.Scope != "full" {
-		writeErr(w, http.StatusBadRequest, `scope must be "upload", "device" or "full"`)
+	if req.Scope != "upload" && req.Scope != "device" && req.Scope != "full" && req.Scope != "planner" {
+		writeErr(w, http.StatusBadRequest, `scope must be "upload", "device", "full" or "planner"`)
 		return
 	}
 	if req.Visibility == "" {

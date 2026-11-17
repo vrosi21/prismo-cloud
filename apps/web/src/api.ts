@@ -46,7 +46,7 @@ export interface Folder {
 export interface Token {
   id: string
   name: string
-  scope: 'upload' | 'device' | 'full'
+  scope: 'upload' | 'device' | 'full' | 'planner'
   default_visibility: Visibility
   created_at: string
   last_used_at: string | null
@@ -107,6 +107,16 @@ export interface Exception {
   minutes?: number
   title?: string
   skip?: boolean
+}
+
+/** A line of the ledger: a change a token made, or a note a session left. */
+export interface LedgerEntry {
+  id: string
+  at: string
+  who: string
+  kind: 'change' | 'note'
+  message: string
+  items: string[]
 }
 
 export interface ItemRef {
@@ -407,6 +417,8 @@ export const api = {
     request<SharedFolderPage>('GET', `/v1/shared/folders/${id}/assets` + query({ kind: f.kind, tag: f.tag, q: f.q, cursor })),
 
   tokens: () => request<{ tokens: Token[] }>('GET', '/v1/tokens').then((r) => r.tokens),
+  ledger: (q: { before?: string; who?: string; limit?: number } = {}) =>
+    request<{ entries: LedgerEntry[]; next?: string }>('GET', '/v1/ledger' + query({ before: q.before, who: q.who, limit: q.limit ? String(q.limit) : undefined })),
   createToken: (name: string, scope: Token['scope'], default_visibility: Visibility) =>
     request<{ token: Token; secret: string }>('POST', '/v1/tokens', { name, scope, default_visibility }),
   updateToken: (id: string, change: { name?: string; default_visibility?: Visibility }) => request<Token>('PATCH', `/v1/tokens/${id}`, change),

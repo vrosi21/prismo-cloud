@@ -1118,3 +1118,10 @@ input.board-group-label { width: 280px; height: auto; }
 .context-item:disabled { color: var(--ink-dim); cursor: default; background: none; }
 .context-heading { padding: 4px 10px 0; color: var(--ink-dim); font-family: var(--font-pixel); font-size: 7px; text-transform: uppercase; }
 .context-sep { margin: 4px 6px; border: 0; border-top: var(--px) dashed var(--line); }
+
+/* --- ledger --- */
+.ledger-block { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; }
+.ledger-note { font-size: 20px; line-height: 1.2; }
+.ledger-changes { display: flex; flex-direction: column; gap: 1px; padding-left: 12px; color: var(--ink-dim); font-size: 17px; line-height: 1.2; box-shadow: inset 2px 0 0 0 var(--line); }
+.ledger-changes .link-btn { color: inherit; }
+.ledger-changes .link-btn:hover { color: var(--accent); }

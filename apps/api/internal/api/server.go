@@ -26,6 +26,10 @@ import (
 // Access levels, lowest to highest. A capture client gets an upload-only
 // token, so a leaked ShareX config cannot read or delete the library.
 const (
+	// API token with scope "planner" (Claude sessions): below every level, so
+	// every route refuses it except those that let the planner in by name
+	// (requireOr): the items, their folders, the ledger.
+	levelPlanner = 0
 	levelUpload  = 1 // API token with scope "upload": may add files
 	levelDevice  = 2 // API token with scope "device": may also look
 	levelFull    = 3 // API token with scope "full": may also change and delete
@@ -87,11 +91,29 @@ func (s *Server) Router() http.Handler {
 			r.Get("/assets", s.listAssets)
 			r.Get("/assets/{id}", s.getAsset)
 			r.Get("/assets/{id}/file", s.assetFile)
-			r.Get("/collections", s.listCollections)
 			r.Get("/shared", s.sharedWithMe)
 			r.Get("/shared/folders/{id}/assets", s.sharedFolderAssets)
+		})
+
+		// The planner: items, the folders they go in, the ledger. A "planner"
+		// token (Claude sessions, the /prismo skill) reaches these and nothing
+		// else; it may not delete a folder or an item for good either.
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireOr(levelDevice, "planner"))
+			r.Get("/collections", s.listCollections)
 			r.With(s.memberOnly).Get("/items", s.listItems)
 			r.With(s.memberOnly).Get("/items/{id}", s.getItem)
+			r.With(s.memberOnly).Get("/ledger", s.listLedger)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireOr(levelFull, "planner"), s.memberOnly)
+			r.Post("/collections", s.createCollection)
+			r.Post("/items", s.createItem)
+			r.Patch("/items/{id}", s.updateItem)
+			r.Delete("/items/{id}", s.deleteItem)
+			r.Post("/items/{id}/links", s.linkItem)
+			r.Delete("/items/{id}/links/{other}", s.unlinkItem)
+			r.Post("/ledger", s.postLedger)
 		})
 
 		// Changing and deleting.
@@ -105,14 +127,8 @@ func (s *Server) Router() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(s.memberOnly)
 				r.Post("/assets/bulk", s.bulkAssets)
-				r.Post("/collections", s.createCollection)
 				r.Patch("/collections/{id}", s.updateCollection)
 				r.Delete("/collections/{id}", s.deleteCollection)
-				r.Post("/items", s.createItem)
-				r.Patch("/items/{id}", s.updateItem)
-				r.Delete("/items/{id}", s.deleteItem)
-				r.Post("/items/{id}/links", s.linkItem)
-				r.Delete("/items/{id}/links/{other}", s.unlinkItem)
 			})
 		})
 
@@ -177,6 +193,8 @@ func (s *Server) authenticate(r *http.Request) (*principal, error) {
 			level = levelDevice
 		case "full":
 			level = levelFull
+		case "planner":
+			level = levelPlanner
 		}
 		// Only members can mint tokens, so a token always speaks for one.
 		return &principal{UserID: t.OwnerID, Level: level, Token: &t, Member: true}, nil
@@ -195,6 +213,15 @@ func (s *Server) authenticate(r *http.Request) (*principal, error) {
 }
 
 func (s *Server) require(level int) func(http.Handler) http.Handler {
+	return s.gate(func(p *principal) bool { return p.Level >= level })
+}
+
+// requireOr lets in the level, or a token of that one scope whatever its level.
+func (s *Server) requireOr(level int, scope string) func(http.Handler) http.Handler {
+	return s.gate(func(p *principal) bool { return p.Level >= level || (p.Token != nil && p.Token.Scope == scope) })
+}
+
+func (s *Server) gate(allowed func(*principal) bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			p, err := s.authenticate(r)
@@ -203,7 +230,7 @@ func (s *Server) require(level int) func(http.Handler) http.Handler {
 				serverError(w, r, err)
 			case p == nil:
 				writeErr(w, http.StatusUnauthorized, "not signed in")
-			case p.Level < level:
+			case !allowed(p):
 				writeErr(w, http.StatusForbidden, "this token is not allowed to do that")
 			default:
 				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))

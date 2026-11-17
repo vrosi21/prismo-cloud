@@ -83,6 +83,7 @@ func (s *Server) createCollection(w http.ResponseWriter, r *http.Request) {
 	if s.folderError(w, r, err) {
 		return
 	}
+	s.record(r, `made folder "`+c.Name+`"`)
 	writeJSON(w, http.StatusCreated, c)
 }
 
