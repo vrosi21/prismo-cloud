@@ -1,0 +1,6 @@
+# Cloudflare Pages response headers. The service worker and the manifest
+# must be checked on every visit, or a phone keeps an old app for a day.
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache

@@ -6,6 +6,9 @@
   "exclude": [
     "/assets/*",
     "/models/*",
-    "/favicon.svg"
+    "/icons/*",
+    "/favicon.svg",
+    "/sw.js",
+    "/manifest.webmanifest"
   ]
 }

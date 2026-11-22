@@ -12,6 +12,16 @@ import { captureInvite } from './lib/invite'
 // An invitation link carries ?invite=...; keep it before anything navigates.
 captureInvite()
 
+// The service worker makes Prismo an installable app (public/sw.js). Not in
+// development, where it would serve yesterday's code.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* no app install then; the site works the same */
+    })
+  })
+}
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },
   queryCache: new QueryCache({

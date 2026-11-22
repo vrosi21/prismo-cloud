@@ -29,10 +29,20 @@ const saved = read('prismo.theme')
 const themeStore = createStore<ThemeId>(THEMES.some((t) => t.id === saved) ? (saved as ThemeId) : 'timeroom')
 const scanlineStore = createStore<boolean>(read('prismo.scanlines') === 'on')
 
+// The phone's status bar and the installed app's title bar take this
+// colour: the wall of the theme in use.
+export function syncThemeColor() {
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (bg && meta) meta.setAttribute('content', bg)
+}
+syncThemeColor()
+
 export function setTheme(id: ThemeId) {
   document.documentElement.dataset.theme = id
   write('prismo.theme', id)
   themeStore.set(id)
+  syncThemeColor()
 }
 
 export function setScanlines(on: boolean) {
