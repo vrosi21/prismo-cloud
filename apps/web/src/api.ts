@@ -109,6 +109,18 @@ export interface Exception {
   skip?: boolean
 }
 
+export type CalendarGroup = 'me' | 'study' | 'work' | 'projects'
+
+/** How one category shows in the calendar (lib/calendars.ts). Tag "*": the colours by tag all share. */
+export interface Calendar {
+  tag: string
+  name: string
+  color: number | null
+  group: CalendarGroup
+  tag_colors: Record<string, number>
+  updated_at: string
+}
+
 /** A line of the ledger: a change a token made, or a note a session left. */
 export interface LedgerEntry {
   id: string
@@ -417,6 +429,9 @@ export const api = {
     request<SharedFolderPage>('GET', `/v1/shared/folders/${id}/assets` + query({ kind: f.kind, tag: f.tag, q: f.q, cursor })),
 
   tokens: () => request<{ tokens: Token[] }>('GET', '/v1/tokens').then((r) => r.tokens),
+  calendars: () => request<{ calendars: Calendar[] }>('GET', '/v1/calendars').then((r) => r.calendars),
+  putCalendar: ({ tag, ...c }: Pick<Calendar, 'tag' | 'name' | 'color' | 'group' | 'tag_colors'>) =>
+    request<Calendar>('PUT', `/v1/calendars/${encodeURIComponent(tag)}`, c),
   ledger: (q: { before?: string; who?: string; limit?: number } = {}) =>
     request<{ entries: LedgerEntry[]; next?: string }>('GET', '/v1/ledger' + query({ before: q.before, who: q.who, limit: q.limit ? String(q.limit) : undefined })),
   createToken: (name: string, scope: Token['scope'], default_visibility: Visibility) =>

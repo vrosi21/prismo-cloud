@@ -8,12 +8,14 @@ import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/t
 import { ARROWS, KeyCap } from '../components/KeyCap'
 import type { ArrowDir } from '../components/sprites'
 import { WALLS } from '../lib/room'
+import { GoogleImport } from '../components/GoogleImport'
 
 export function Settings({ me }: { me: Me }) {
   return (
     <div className="h-full overflow-y-auto px-2 pt-2">
       <div className="mx-auto flex max-w-[900px] flex-col gap-6 pb-8">
         <Look />
+        {me.member && <FromGoogle />}
         <Keys />
         {/* Tokens belong to a library; a guest has none. */}
         {me.member && <CaptureClients publicUrl={me.public_url} />}
@@ -29,6 +31,22 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h2 className="uppercase">{title}</h2>
       {children}
     </section>
+  )
+}
+
+function FromGoogle() {
+  const [open, setOpen] = useState(false)
+  return (
+    <Section title="from google">
+      <p>
+        &gt; bring Google Calendar and Google Tasks over: the Takeout .zip, or .ics files and Tasks.json. You choose which calendars and lists
+        come in and where they go; what is already here, and Google's own doubles, are left out.
+      </p>
+      <button type="button" className="btn self-start" onClick={() => setOpen(true)}>
+        import from google
+      </button>
+      {open && <GoogleImport onClose={() => setOpen(false)} />}
+    </Section>
   )
 }
 

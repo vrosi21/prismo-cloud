@@ -672,6 +672,32 @@ check('changes in the browser are not listed', r.json?.entries.length === lines.
 await call('DELETE', `/v1/items/${planned?.id}`)
 await call('DELETE', `/v1/items/${planned?.id}?permanent=1`)
 
+// --- calendars: colour, group, colours by tag ---
+r = await call('GET', '/v1/calendars')
+check('no calendar settings at first', r.status === 200 && r.json?.calendars.length === 0, r.text.slice(0, 120))
+r = await call('PUT', '/v1/calendars/dsai', { body: { name: 'DSAI', color: 5, group: 'study', tag_colors: { 'type:exam': 1 } } })
+check('set a calendar', r.status === 200 && r.json?.group === 'study' && r.json?.tag_colors['type:exam'] === 1, r.text.slice(0, 160))
+r = await call('PUT', '/v1/calendars/dsai', { body: { name: 'DSAI', color: 4, group: 'study', tag_colors: {} } })
+check('setting it again replaces it', r.status === 200 && r.json?.color === 4 && Object.keys(r.json?.tag_colors ?? {}).length === 0)
+r = await call('PUT', `/v1/calendars/${encodeURIComponent('*')}`, { body: { tag_colors: { 'type:deadline': 2 } } })
+check('the shared colours by tag ("*")', r.status === 200 && r.json?.group === 'me', r.text.slice(0, 160))
+for (const [p, body, why] of [
+  ['/v1/calendars/a:b', {}, 'a calendar is a plain tag'],
+  ['/v1/calendars/dsai', { color: 9 }, 'colours are 1 to 6'],
+  ['/v1/calendars/dsai', { group: 'fun' }, 'groups are fixed'],
+  ['/v1/calendars/dsai', { tag_colors: { exam: 1 } }, 'colours by tag need key:value'],
+]) {
+  r = await call('PUT', p, { body })
+  check(`a calendar is refused: ${why}`, r.status === 400, String(r.status))
+}
+r = await call('GET', '/v1/calendars', { token: planTok })
+check('a planner token reads the calendars', r.status === 200 && r.json?.calendars.length === 2, r.text.slice(0, 160))
+r = await call('PUT', '/v1/calendars/prismo', { token: planTok, headers: as, body: { color: 6, group: 'projects' } })
+check('and sets them', r.status === 200)
+r = await call('DELETE', '/v1/calendars/prismo')
+r = await call('GET', '/v1/calendars')
+check('a calendar is reset', r.status === 200 && r.json?.calendars.length === 2)
+
 // --- logout ---
 r = await call('POST', '/v1/auth/logout')
 r = await call('GET', '/v1/me')

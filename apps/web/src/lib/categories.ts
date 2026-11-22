@@ -24,8 +24,9 @@ export const topsOf = (it: Pick<Item, 'tags'>) => {
   const tops = (it.tags ?? []).filter((t) => !isFacet(t))
   return tops.length ? tops : [NONE]
 }
-// "pin:<section>" puts an item on the pinned board (lib/pins.ts); it is no filter.
-export const facetsOf = (it: Pick<Item, 'tags'>) => (it.tags ?? []).filter((t) => isFacet(t) && !t.startsWith('pin:'))
+// "pin:<section>" puts an item on the pinned board (lib/pins.ts) and "gid:"
+// remembers where an import came from (lib/gimport.ts); neither is a filter.
+export const facetsOf = (it: Pick<Item, 'tags'>) => (it.tags ?? []).filter((t) => isFacet(t) && !t.startsWith('pin:') && !t.startsWith('gid:'))
 
 /** Every category these items have, its count, and the facets inside it. */
 export function categories(items: Item[]): Category[] {
@@ -54,21 +55,23 @@ export function categories(items: Item[]): Category[] {
     }))
 }
 
-/** What is switched off: whole categories, and "category|key:value" facets. */
+/** What is switched off: whole categories, "category|key:value" facets, and groups of calendars. */
 export interface Hidden {
   tops: string[]
   facets: string[]
+  /** Groups switched off (lib/calendars.ts); "projects" starts off. */
+  groups: string[]
 }
 
 const KEY = 'prismo.cal.hidden'
 function load(): Hidden {
   try {
     const h = JSON.parse(localStorage.getItem(KEY) ?? '') as Hidden
-    if (Array.isArray(h.tops) && Array.isArray(h.facets)) return h
+    if (Array.isArray(h.tops) && Array.isArray(h.facets)) return { ...h, groups: Array.isArray(h.groups) ? h.groups : ['projects'] }
   } catch {
     /* nothing remembered */
   }
-  return { tops: [], facets: [] }
+  return { tops: [], facets: [], groups: ['projects'] }
 }
 
 export const hidden = createStore<Hidden>(load())
@@ -81,9 +84,14 @@ export function setHidden(next: Hidden) {
   }
 }
 
-/** Shown if one of its categories is on and none of its facets is off there. */
-export function shown(it: Pick<Item, 'tags'>, h: Hidden): boolean {
-  if (h.tops.length === 0 && h.facets.length === 0) return true
+/**
+ * Shown if one of its categories is on, in a group that is on, and none of
+ * its facets is off there.
+ */
+export function shown(it: Pick<Item, 'tags'>, h: Hidden, groupOf?: (tag: string) => string): boolean {
+  if (h.tops.length === 0 && h.facets.length === 0 && (h.groups.length === 0 || !groupOf)) return true
   const facets = facetsOf(it)
-  return topsOf(it).some((top) => !h.tops.includes(top) && facets.every((f) => !h.facets.includes(`${top}|${f}`)))
+  return topsOf(it).some(
+    (top) => !h.tops.includes(top) && !(groupOf && top !== NONE && h.groups.includes(groupOf(top))) && facets.every((f) => !h.facets.includes(`${top}|${f}`)),
+  )
 }

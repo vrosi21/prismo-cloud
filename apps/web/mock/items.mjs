@@ -122,6 +122,14 @@ export function itemRoutes({ uuid, body, collections }) {
   make({ kind: 'event', title: 'lunch with mia', date: day(1), time: '12:30', minutes: 90, color: 4 })
   make({ kind: 'event', title: 'focus block', date: day(1), time: '13:00', minutes: 120, color: 6 })
   make({ kind: 'event', title: 'trip to the coast', date: day(12), end_date: day(15), color: 3 })
+  // Calendars: a few items in categories, so the calendar's groups and
+  // colours by tag have something to show.
+  make({ kind: 'task', title: 'mai3 midterm', date: day(2), time: '10:00', minutes: 90, tags: ['dsai', 'course:mai3', 'type:exam'] })
+  make({ kind: 'event', title: 'rf lab', date: day(-7), time: '14:00', minutes: 120, repeat: 'weekly', tags: ['dsai', 'course:rf', 'type:lab'] })
+  make({ kind: 'task', title: 'rl project report', date: day(5), tags: ['dsai', 'course:rl', 'type:deadline'] })
+  make({ kind: 'event', title: 'haircut', date: day(4), time: '17:00', minutes: 30, tags: ['personal', 'type:appointment'] })
+  make({ kind: 'task', title: 'buy printer ink', date: day(1), tags: ['personal', 'type:errand'] })
+  make({ kind: 'task', title: 'prismo: phone layout', date: day(2), tags: ['prismo', 'area:web'], collection_id: collections[0].id })
   const notes = make({
     kind: 'notebook',
     title: 'dentist questions',
@@ -166,7 +174,27 @@ export function itemRoutes({ uuid, body, collections }) {
     { id: uuid(), at: ago(97), who: 'dsai-schedule', kind: 'change', message: 'changed task "mai3 test 3": day 2026-12-11', items: [] },
   ]
 
+  // Calendars' settings (the real ones are in the calendars table).
+  const calendars = new Map([
+    ['*', { tag: '*', name: '', color: null, group: 'me', tag_colors: { 'type:exam': 1, 'type:deadline': 2, 'type:lab': 5, 'type:appointment': 6, 'type:errand': 3 }, updated_at: now() }],
+    ['dsai', { tag: 'dsai', name: 'DSAI', color: 5, group: 'study', tag_colors: {}, updated_at: now() }],
+    ['personal', { tag: 'personal', name: 'Personal', color: 4, group: 'me', tag_colors: {}, updated_at: now() }],
+    ['prismo', { tag: 'prismo', name: 'Prismo', color: 6, group: 'projects', tag_colors: {}, updated_at: now() }],
+  ])
+
   return [
+    ['GET', /^\/v1\/calendars$/, () => [200, { calendars: [...calendars.values()] }]],
+    ['PUT', /^\/v1\/calendars\/([^/]+)$/, async (req, m) => {
+      const tag = decodeURIComponent(m[1])
+      const b = await body(req)
+      const c = { tag, name: b.name ?? '', color: b.color ?? null, group: b.group || 'me', tag_colors: b.tag_colors ?? {}, updated_at: now() }
+      calendars.set(tag, c)
+      return [200, c]
+    }],
+    ['DELETE', /^\/v1\/calendars\/([^/]+)$/, (req, m) => {
+      calendars.delete(decodeURIComponent(m[1]))
+      return [204]
+    }],
     ['GET', /^\/v1\/ledger$/, (req, m, q) => [200, { entries: ledger.filter((e) => !q.get('who') || e.who === q.get('who')) }]],
     ['POST', /^\/v1\/ledger$/, async (req) => {
       const b = await body(req)

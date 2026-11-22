@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import type { Item, ItemKind } from '../api'
+import type { ItemKind } from '../api'
 import { covers, DAYS, daysBetween, hhmm, iso, minutesOf, monthGrid, MONTHS, parse, plusDays, short, today, weekday, type Occurrence } from '../lib/days'
 import { openItem, titleOf, useItemChanges, useItems } from '../lib/items'
 import { categories, NONE } from '../lib/categories'
 import { useNarrow } from '../lib/narrow'
+import { useColorOf } from '../lib/calendars'
 import { openAt, pendingMove } from '../lib/repeats'
 import { useOccurrenceMenu } from './Menus'
 
@@ -37,11 +38,14 @@ interface ViewProps {
 
 type OnMenu = (e: ReactMouseEvent, o: Occurrence) => void
 
-const colorStyle = (it: Item): CSSProperties => (it.color ? ({ '--chip': `var(--c${it.color})` } as CSSProperties) : {})
+// The colour comes from the calendar (lib/calendars.ts: the item's own,
+// else its tag's, else its calendar's).
+const colorStyle = (c: number | null): CSSProperties => (c ? ({ '--chip': `var(--c${c})` } as CSSProperties) : {})
 
 /** One appearance, as a chip: colour, a box to tick for a task, the title. */
 function Chip({ o, showTime = true, onPointerDown, onMenu }: { o: Occurrence; showTime?: boolean; onPointerDown?: (e: ReactPointerEvent) => void; onMenu?: OnMenu }) {
   const { update } = useItemChanges()
+  const colorOf = useColorOf()
   const it = o.item
   const done = it.status === 'done'
   const continues = o.date !== o.end
@@ -52,7 +56,7 @@ function Chip({ o, showTime = true, onPointerDown, onMenu }: { o: Occurrence; sh
       data-kind={it.kind}
       data-done={done || undefined}
       data-status={it.status ?? undefined}
-      style={colorStyle(it)}
+      style={colorStyle(colorOf(it))}
       title={`${titleOf(it)}${it.time ? ` · ${it.time}` : ''}${continues ? ` · until ${short(o.end)}` : ''}`}
       onPointerDown={onPointerDown}
     >
@@ -255,6 +259,7 @@ export function TimeGrid({ days, occ, onDraft }: ViewProps & { days: string[] })
   const now = useNow()
   const drop = useDropChange()
   const occMenu = useOccurrenceMenu()
+  const colorOf = useColorOf()
   const { drag, start } = useDragItems(drop)
   const [making, setMaking] = useState<{ date: string; from: number; to: number; x: number; y: number } | null>(null)
 
@@ -365,7 +370,7 @@ export function TimeGrid({ days, occ, onDraft }: ViewProps & { days: string[] })
                 <Block key={p.o.key} p={p} onMove={start(p.o, 'move')} onResize={start(p.o, 'resize')} onMenu={occMenu} />
               ))}
               {drag?.moved && drag.date === d && drag.o.item.time && (
-                <div className="tg-block tg-ghost" style={{ top: (drag.start / 60) * HOUR, height: (drag.minutes / 60) * HOUR, left: 2, right: 2, ...colorStyle(drag.o.item) }}>
+                <div className="tg-block tg-ghost" style={{ top: (drag.start / 60) * HOUR, height: (drag.minutes / 60) * HOUR, left: 2, right: 2, ...colorStyle(colorOf(drag.o.item)) }}>
                   <span className="cal-chip-time">
                     {hhmm(drag.start)}-{hhmm(drag.start + drag.minutes)}
                   </span>
@@ -392,6 +397,7 @@ function Block({ p, onMove, onResize, onMenu }: { p: Placed; onMove: (e: ReactPo
   const it = p.o.item
   const height = Math.max(((p.end - p.start) / 60) * HOUR, 18)
   const { update } = useItemChanges()
+  const colorOf = useColorOf()
   return (
     <div
       className="tg-block"
@@ -404,7 +410,7 @@ function Block({ p, onMove, onResize, onMenu }: { p: Placed; onMove: (e: ReactPo
         height,
         left: `calc(${(p.col / p.cols) * 100}% + 2px)`,
         width: `calc(${100 / p.cols}% - 4px)`,
-        ...colorStyle(it),
+        ...colorStyle(colorOf(it)),
       }}
       onPointerDown={onMove}
       title={titleOf(it)}
@@ -653,6 +659,7 @@ export function QuickCreate({ draft, onClose }: { draft: Draft; onClose: () => v
 export function Agenda({ from, to, occ, onMore }: { from: string; to: string; occ: Occurrence[]; onMore: () => void }) {
   const { update } = useItemChanges()
   const occMenu = useOccurrenceMenu()
+  const colorOf = useColorOf()
   const end = useRef<HTMLDivElement>(null)
   const t = today()
 
@@ -701,7 +708,7 @@ export function Agenda({ from, to, occ, onMore }: { from: string; to: string; oc
                   <li
                     key={o.key}
                     className="agenda-row"
-                    style={colorStyle(it)}
+                    style={colorStyle(colorOf(it))}
                     data-kind={it.kind}
                     data-done={it.status === 'done' || undefined}
                     onContextMenu={(e) => occMenu(e, o)}

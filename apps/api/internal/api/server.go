@@ -95,7 +95,8 @@ func (s *Server) Router() http.Handler {
 			r.Get("/shared/folders/{id}/assets", s.sharedFolderAssets)
 		})
 
-		// The planner: items, the folders they go in, the ledger. A "planner"
+		// The planner: items, the folders they go in, the ledger, the
+		// calendars' settings. A "planner"
 		// token (Claude sessions, the /prismo skill) reaches these and nothing
 		// else; it may not delete a folder or an item for good either.
 		r.Group(func(r chi.Router) {
@@ -104,6 +105,7 @@ func (s *Server) Router() http.Handler {
 			r.With(s.memberOnly).Get("/items", s.listItems)
 			r.With(s.memberOnly).Get("/items/{id}", s.getItem)
 			r.With(s.memberOnly).Get("/ledger", s.listLedger)
+			r.With(s.memberOnly).Get("/calendars", s.listCalendars)
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireOr(levelFull, "planner"), s.memberOnly)
@@ -114,6 +116,8 @@ func (s *Server) Router() http.Handler {
 			r.Post("/items/{id}/links", s.linkItem)
 			r.Delete("/items/{id}/links/{other}", s.unlinkItem)
 			r.Post("/ledger", s.postLedger)
+			r.Put("/calendars/{tag}", s.putCalendar)
+			r.Delete("/calendars/{tag}", s.deleteCalendar)
 		})
 
 		// Changing and deleting.

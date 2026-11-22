@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type TouchEvent as ReactTouchEvent } from 'react'
-import type { Item } from '../api'
+import type { CalendarGroup, Item } from '../api'
 import { addDays, DAYS, iso, monthGrid, MONTHS, occurrences, parse, plusDays, short, today, weekday } from '../lib/days'
-import { categories, hidden, NONE, setHidden, shown, type Hidden } from '../lib/categories'
-import { openItem, titleOf, useItemChanges, useItems } from '../lib/items'
+import { categories, hidden, NONE, setHidden, shown } from '../lib/categories'
+import { ALL, DEFAULT_TAG_COLORS, GROUPS, nameOf, useCalendars, useGroupOf, useSaveCalendar } from '../lib/calendars'
+import { COLORS, openItem, titleOf, useItemChanges, useItems } from '../lib/items'
 import { facing, WALLS } from '../lib/room'
 import { typing } from '../lib/spatial'
 import { useStore } from '../lib/store'
@@ -12,6 +13,7 @@ import { MoveChoice } from './Appearance'
 import { useItemEntries } from './Menus'
 import { openMenu } from '../lib/menu'
 import { KeyCap } from './KeyCap'
+import { GoogleImport } from './GoogleImport'
 
 // The time wall: a calendar the way Google's works, and a task list beside
 // it. Everything on it is an item (see lib/items): an event has a day, a
@@ -76,6 +78,7 @@ export function TimeWall() {
   const view = (narrow && ON_PHONE[chosen]) || chosen
   const [agendaDays, setAgendaDays] = useState(AGENDA_STEP)
   const [filters, setFilters] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [layout, setLayoutState] = useState<Layout>(() => remembered('prismo.cal.layout', '2x2', LAYOUTS.map((l) => l.id)))
   const [anchor, setAnchor] = useState(today)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -130,7 +133,8 @@ export function TimeWall() {
   const { data: all = [], isError } = useItems({ from, to, someday: true })
   // What the category filter lets through.
   const off = useStore(hidden)
-  const items = useMemo(() => all.filter((it) => shown(it, off)), [all, off])
+  const groupOf = useGroupOf(all)
+  const items = useMemo(() => all.filter((it) => shown(it, off, groupOf)), [all, off, groupOf])
   const occ = useMemo(() => occurrences(items, from, to), [items, from, to])
 
   const moreDays = useCallback(() => setAgendaDays((n) => Math.min(n + AGENDA_STEP, 400)), [])
@@ -209,8 +213,12 @@ export function TimeWall() {
           items={items}
         />
         <Categories inRange={all} />
+        <button type="button" className="link-btn self-start text-[17px]" onClick={() => setImporting(true)}>
+          import from google...
+        </button>
         {!narrow && <TaskList items={items} anchor={anchor} />}
       </aside>
+      {importing && <GoogleImport onClose={() => setImporting(false)} />}
       <MoveChoice />
 
       <div className="time-main panel px">
@@ -514,76 +522,221 @@ function TaskList({ items, anchor }: { items: Item[]; anchor: string }) {
 }
 
 /**
- * The calendar's categories, like Google's list of calendars: each can be
- * switched off, or shown alone; open one to switch off parts of it (a
- * course, a type). Built from the items' tags, nothing to set up.
+ * The calendars, like Google's list: grouped (me, study, work, projects),
+ * each with its colour and a box to switch it off; a group switches off as
+ * a whole ("projects" starts off). Open one to switch off parts of it (a
+ * course, a type); "edit" sets its name, colour, group and colours by tag.
+ * Built from the items' tags; the settings come from lib/calendars.ts.
  */
 function Categories({ inRange }: { inRange: Item[] }) {
   // Categories of everything, not only of what this range shows, so one
   // that was switched off does not vanish from the list.
   const { data: recent = [] } = useItems({})
-  const cats = useMemo(() => {
+  const everything = useMemo(() => {
     const seen = new Map<string, Item>()
     for (const it of [...recent, ...inRange]) seen.set(it.id, it)
-    return categories([...seen.values()])
+    return [...seen.values()]
   }, [recent, inRange])
+  const cats = useMemo(() => categories(everything), [everything])
+  const cals = useCalendars()
+  const groupOf = useGroupOf(everything)
   const off = useStore(hidden)
   const [open, setOpen] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
   if (cats.length === 0 || (cats.length === 1 && cats[0].tag === NONE)) return null
 
-  const toggle = (list: keyof Hidden, key: string) => {
+  const toggle = (list: 'tops' | 'facets' | 'groups', key: string) => {
     const has = off[list].includes(key)
     setHidden({ ...off, [list]: has ? off[list].filter((k) => k !== key) : [...off[list], key] })
   }
-  const only = (tag: string) => setHidden({ tops: cats.map((c) => c.tag).filter((t) => t !== tag), facets: off.facets.filter((f) => f.startsWith(`${tag}|`)) })
-  const any = off.tops.length > 0 || off.facets.length > 0
+  const only = (tag: string) =>
+    setHidden({
+      tops: cats.map((c) => c.tag).filter((t) => t !== tag),
+      facets: off.facets.filter((f) => f.startsWith(`${tag}|`)),
+      groups: off.groups.filter((g) => g !== groupOf(tag)),
+    })
+  const any = off.tops.length > 0 || off.facets.length > 0 || off.groups.some((g) => g !== 'projects')
+
+  const row = (c: (typeof cats)[number]) => {
+    const on = !off.tops.includes(c.tag)
+    const name = nameOf(c.tag, cals)
+    const color = c.tag === NONE ? null : cals.get(c.tag)?.color
+    return (
+      <li key={c.tag || '-'}>
+        <div className="cat-row">
+          <input
+            type="checkbox"
+            className="check check-sm"
+            checked={on}
+            aria-label={`show ${name}`}
+            onChange={() => toggle('tops', c.tag)}
+            style={color ? { background: `var(--c${color})` } : undefined}
+          />
+          <button type="button" className="cat-name" aria-expanded={c.facets.length ? open === c.tag : undefined} onClick={() => setOpen(open === c.tag ? null : c.tag)}>
+            {name}
+            {c.facets.length > 0 && <span className="dim"> {open === c.tag ? 'v' : '>'}</span>}
+          </button>
+          <button type="button" className="chip cat-only" onClick={() => only(c.tag)} title={`show only ${name}`}>
+            only
+          </button>
+          {c.tag !== NONE && (
+            <button type="button" className="chip cat-only" onClick={() => setEditing(c.tag)} title={`edit ${name}: colour, group, colours by tag`}>
+              edit
+            </button>
+          )}
+        </div>
+        {open === c.tag &&
+          c.facets.map((f) => (
+            <div key={f.key} className="cat-facet">
+              <span className="label">{f.key}</span>
+              <div className="flex flex-wrap gap-1">
+                {f.values.map((v) => {
+                  const key = `${c.tag}|${f.key}:${v.value}`
+                  return (
+                    <button key={v.value} type="button" className="chip" aria-pressed={!off.facets.includes(key)} onClick={() => toggle('facets', key)} title={`${v.count} items`}>
+                      {v.value}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+      </li>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <h3 className="section-title uppercase !p-0">categories</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="section-title uppercase !p-0">calendars</h3>
+        <span className="flex-1" />
+        <button type="button" className="chip" onClick={() => setEditing(ALL)} title="colours by tag, for every calendar">
+          tag colours
+        </button>
         {any && (
-          <button type="button" className="chip" onClick={() => setHidden({ tops: [], facets: [] })}>
+          <button type="button" className="chip" onClick={() => setHidden({ tops: [], facets: [], groups: ['projects'] })}>
             all
           </button>
         )}
       </div>
       <ul className="cats">
-        {cats.map((c) => {
-          const on = !off.tops.includes(c.tag)
-          const name = c.tag === NONE ? 'no category' : c.tag
+        {GROUPS.map((g) => {
+          const list = cats.filter((c) => c.tag !== NONE && groupOf(c.tag) === g.id)
+          if (list.length === 0) return null
+          const on = !off.groups.includes(g.id)
           return (
-            <li key={c.tag || '-'}>
-              <div className="cat-row">
-                <input type="checkbox" className="check check-sm" checked={on} aria-label={`show ${name}`} onChange={() => toggle('tops', c.tag)} />
-                <button type="button" className="cat-name" aria-expanded={c.facets.length ? open === c.tag : undefined} onClick={() => setOpen(open === c.tag ? null : c.tag)}>
-                  {name}
-                  {c.facets.length > 0 && <span className="dim"> {open === c.tag ? 'v' : '>'}</span>}
-                </button>
-                <button type="button" className="chip cat-only" onClick={() => only(c.tag)} title={`show only ${name}`}>
-                  only
-                </button>
-              </div>
-              {open === c.tag &&
-                c.facets.map((f) => (
-                  <div key={f.key} className="cat-facet">
-                    <span className="label">{f.key}</span>
-                    <div className="flex flex-wrap gap-1">
-                      {f.values.map((v) => {
-                        const key = `${c.tag}|${f.key}:${v.value}`
-                        return (
-                          <button key={v.value} type="button" className="chip" aria-pressed={!off.facets.includes(key)} onClick={() => toggle('facets', key)} title={`${v.count} items`}>
-                            {v.value}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
+            <li key={g.id} className="cat-group">
+              <label className="cat-group-head">
+                <input type="checkbox" className="check check-sm" checked={on} onChange={() => toggle('groups', g.id)} />
+                <span className="label !m-0">{g.label}</span>
+                {!on && <span className="dim text-[16px]">({list.length} hidden)</span>}
+              </label>
+              {on && <ul>{list.map(row)}</ul>}
             </li>
           )
         })}
+        {cats.filter((c) => c.tag === NONE).map(row)}
       </ul>
+      {editing && <CalendarEdit tag={editing} cats={cats} onClose={() => setEditing(null)} />}
     </div>
+  )
+}
+
+/**
+ * One calendar's settings: name, colour, group, and colours by tag for the
+ * tags its items have. For "*": the colours by tag every calendar shares.
+ */
+function CalendarEdit({ tag, cats, onClose }: { tag: string; cats: ReturnType<typeof categories>; onClose: () => void }) {
+  const cals = useCalendars()
+  const save = useSaveCalendar()
+  const now = cals.get(tag)
+  const shared = tag === ALL
+  const [name, setName] = useState(now?.name ?? '')
+  const [color, setColor] = useState<number | null>(now?.color ?? null)
+  const [group, setGroup] = useState<CalendarGroup>(now?.group ?? 'me')
+  const [tagColors, setTagColors] = useState<Record<string, number>>(now?.tag_colors ?? (shared ? DEFAULT_TAG_COLORS : {}))
+  // The tags to colour: this calendar's own facets, or everyone's for "*".
+  const facets = useMemo(() => {
+    const out = new Set<string>(Object.keys(tagColors))
+    for (const c of cats) if (shared || c.tag === tag) for (const f of c.facets) for (const v of f.values) out.add(`${f.key}:${v.value}`)
+    return [...out].sort()
+  }, [cats, tag, shared, tagColors])
+  const setTag = (f: string, c: number | null) =>
+    setTagColors((t) => {
+      const next = { ...t }
+      if (c) next[f] = c
+      else delete next[f]
+      return next
+    })
+  const swatches = (value: number | null, pick: (c: number | null) => void, label: string) => (
+    <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
+      <button type="button" className="swatch" title="no colour" aria-pressed={value === null} onClick={() => pick(null)}>
+        <span className="swatch-none" />
+      </button>
+      {COLORS.map((c) => (
+        <button key={c.id} type="button" className="swatch" title={c.label} aria-pressed={value === c.id} onClick={() => pick(c.id)}>
+          <span style={{ background: `var(--c${c.id})` }} />
+        </button>
+      ))}
+    </div>
+  )
+  return (
+    <>
+      <div className="sheet-scrim" onClick={onClose} aria-hidden />
+      <div className="panel px-raised cal-edit" role="dialog" aria-label={shared ? 'colours by tag' : `calendar ${tag}`}>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="section-title uppercase !p-0">{shared ? 'colours by tag, every calendar' : `calendar: ${tag}`}</h3>
+          <button type="button" className="btn btn-sm" onClick={onClose} aria-label="close">
+            x
+          </button>
+        </div>
+        {!shared && (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="label !m-0">name</span>
+              <input className="field" value={name} maxLength={60} placeholder={tag} onChange={(e) => setName(e.target.value)} />
+            </label>
+            <span className="label !m-0">colour</span>
+            {swatches(color, setColor, 'colour')}
+            <label className="flex flex-col gap-1">
+              <span className="label !m-0">group</span>
+              <select className="field" value={group} onChange={(e) => setGroup(e.target.value as CalendarGroup)}>
+                {GROUPS.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
+        <span className="label !m-0">colours by tag</span>
+        <p className="dim text-[16px]">
+          &gt; {shared ? 'a tag here colours items in any calendar, unless the calendar sets its own.' : "beats the calendar's colour; an item's own colour beats this."}
+        </p>
+        {facets.length === 0 && <p className="dim">&gt; no key:value tags yet (type:exam, course:rf...).</p>}
+        <ul className="flex flex-col gap-2">
+          {facets.map((f) => (
+            <li key={f} className="flex flex-col gap-1">
+              <span>{f}</span>
+              {swatches(tagColors[f] ?? null, (c) => setTag(f, c), `colour of ${f}`)}
+            </li>
+          ))}
+        </ul>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn btn-sm btn-accent"
+            disabled={save.isPending}
+            onClick={() => save.mutate({ tag, name: name.trim(), color, group, tag_colors: tagColors }, { onSuccess: onClose })}
+          >
+            save
+          </button>
+          <button type="button" className="btn btn-sm" onClick={onClose}>
+            cancel
+          </button>
+        </div>
+      </div>
+    </>
   )
 }

@@ -1234,3 +1234,22 @@ input.board-group-label { width: 280px; height: auto; }
   .time-bar { gap: 8px; }
   .time-title { font-size: 10px; }
 }
+
+/* --- Calendars: groups and the edit sheet (TimeWall.tsx Categories) ------- */
+.cat-group { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; }
+.cat-group-head { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.cat-group > ul { padding-left: 10px; }
+.cal-edit { position: fixed; z-index: 66; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 48px); flex-direction: column; gap: 10px; padding: 14px; overflow-y: auto; }
+@media (max-width: 640px) {
+  .cal-edit { left: 0; right: 0; top: auto; bottom: 0; width: auto; transform: none; max-height: 85dvh; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+}
+
+/* --- Import from Google (components/GoogleImport.tsx) ----------------------- */
+.gimport { position: fixed; z-index: 66; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; width: min(640px, calc(100vw - 24px)); max-height: calc(100dvh - 48px); flex-direction: column; gap: 12px; padding: 16px; overflow-y: auto; }
+.gimport-list { display: flex; flex-direction: column; gap: 6px; }
+.gimport-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 8px; background: var(--panel-2); }
+.gimport-row[data-off] { background: transparent; opacity: 0.75; }
+.gimport-sum { padding: 8px 10px; background: var(--bg-deep); }
+@media (max-width: 640px) {
+  .gimport { left: 0; right: 0; top: auto; bottom: 0; width: auto; transform: none; max-height: 90dvh; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+}
