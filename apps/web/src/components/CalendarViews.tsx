@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Item, ItemKind } from '../api'
 import { covers, DAYS, daysBetween, hhmm, iso, minutesOf, monthGrid, MONTHS, parse, plusDays, short, today, weekday, type Occurrence } from '../lib/days'
-import { openItem, titleOf, useItemChanges } from '../lib/items'
+import { openItem, titleOf, useItemChanges, useItems } from '../lib/items'
+import { categories, NONE } from '../lib/categories'
+import { useNarrow } from '../lib/narrow'
 import { openAt, pendingMove } from '../lib/repeats'
 import { useOccurrenceMenu } from './Menus'
 
@@ -10,10 +12,14 @@ import { useOccurrenceMenu } from './Menus'
 //   TimeGrid    one to seven days side by side, hour by hour
 //   MonthGrid   one month, six weeks of cells
 // Dragging works the same everywhere: press, move, let go. A press that did
-// not move is a click.
+// not move is a click. With a finger the page has to scroll, so a drag only
+// starts after holding still for a moment (LONG_PRESS); a finger that moves
+// before that is scrolling, and a quick tap is a click.
 
 export const HOUR = 44 // px per hour in the time grid
 const SNAP = 15 // minutes
+const LONG_PRESS = 400 // ms a finger holds still before a chip is picked up
+const SLOP = 8 // px a finger may wander and still be a tap
 
 export interface Draft {
   date: string
@@ -116,20 +122,63 @@ function useDragItems(onDone: (d: Drag) => void) {
       setDrag(null)
       if (d) onDone(d)
     }
+    // The browser took the pointer (a scroll, a system gesture): nothing happened.
+    const cancel = () => setDrag(null)
+    // A finger that picked a chip up must not scroll the page while it moves.
+    const noScroll = (e: TouchEvent) => e.cancelable && e.preventDefault()
+    // A long-press also opens the menu. Held still, that is what was meant;
+    // once the chip moved, it is a drag and the menu stays shut.
+    const onMenu = (e: Event) => {
+      if (live.current?.moved) {
+        e.preventDefault()
+        e.stopPropagation()
+      } else setDrag(null)
+    }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up, { once: true })
+    window.addEventListener('pointercancel', cancel, { once: true })
+    window.addEventListener('touchmove', noScroll, { passive: false })
+    window.addEventListener('contextmenu', onMenu, true)
     return () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', cancel)
+      window.removeEventListener('touchmove', noScroll)
+      window.removeEventListener('contextmenu', onMenu, true)
     }
   }, [drag !== null]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = (o: Occurrence, mode: Drag['mode']) => (e: ReactPointerEvent) => {
     if (e.button !== 0) return
     e.stopPropagation()
-    e.preventDefault()
     const it = o.item
-    setDrag({ o, mode, x: e.clientX, y: e.clientY, moved: false, date: o.date, start: it.time ? minutesOf(it.time) : 0, minutes: it.minutes ?? 60 })
+    const at = { o, mode, x: e.clientX, y: e.clientY, moved: false, date: o.date, start: it.time ? minutesOf(it.time) : 0, minutes: it.minutes ?? 60 }
+    if (e.pointerType !== 'touch') {
+      e.preventDefault()
+      setDrag(at)
+      return
+    }
+    // A finger: wait. Held still, the chip is picked up; moved, it was a
+    // scroll; let go quickly, it was a tap and opens the item.
+    const done = () => {
+      clearTimeout(timer)
+      window.removeEventListener('pointermove', wander)
+      window.removeEventListener('pointerup', tap)
+      window.removeEventListener('pointercancel', done)
+    }
+    const timer = window.setTimeout(() => {
+      done()
+      navigator.vibrate?.(10)
+      setDrag(at)
+    }, LONG_PRESS)
+    const wander = (ev: PointerEvent) => Math.hypot(ev.clientX - at.x, ev.clientY - at.y) > SLOP && done()
+    const tap = () => {
+      done()
+      onDone(at)
+    }
+    window.addEventListener('pointermove', wander)
+    window.addEventListener('pointerup', tap, { once: true })
+    window.addEventListener('pointercancel', done, { once: true })
   }
   return { drag, start }
 }
@@ -232,6 +281,26 @@ export function TimeGrid({ days, occ, onDraft }: ViewProps & { days: string[] })
     if (e.button !== 0 || e.target !== e.currentTarget) return
     const col = e.currentTarget
     const m = minuteAt(e, col)
+    if (e.pointerType === 'touch') {
+      // A finger scrolls the hours. Only a tap that stayed put makes an
+      // hour-long event there.
+      const x = e.clientX
+      const y = e.clientY
+      const off = () => {
+        window.removeEventListener('pointerup', tap)
+        window.removeEventListener('pointercancel', off)
+        window.removeEventListener('pointermove', wander)
+      }
+      const wander = (ev: PointerEvent) => Math.hypot(ev.clientX - x, ev.clientY - y) > SLOP && off()
+      const tap = () => {
+        off()
+        onDraft({ date: day, time: hhmm(m - (m % 60)), minutes: 60, x, y })
+      }
+      window.addEventListener('pointermove', wander)
+      window.addEventListener('pointerup', tap, { once: true })
+      window.addEventListener('pointercancel', off, { once: true })
+      return
+    }
     setMaking({ date: day, from: m, to: m + 60, x: e.clientX, y: e.clientY })
     const move = (ev: PointerEvent) => {
       const to = Math.max(m + SNAP, minuteAt(ev, col) + SNAP)
@@ -244,8 +313,14 @@ export function TimeGrid({ days, occ, onDraft }: ViewProps & { days: string[] })
         return null
       })
     }
+    const cancel = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      setMaking(null)
+    }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up, { once: true })
+    window.addEventListener('pointercancel', cancel, { once: true })
   }
 
   const cols = { gridTemplateColumns: `52px repeat(${days.length}, minmax(0, 1fr))` }
@@ -433,22 +508,43 @@ export function MonthGrid({
 
 // --- making a new one -------------------------------------------------------
 
-/** A small box where the pointer was: a title, event or task, Enter. */
+/**
+ * A small box where the pointer was: a title, event or task, Enter. On a
+ * phone it comes up from the bottom instead, with the day, the time and a
+ * category to pick, since there was no drag to say when.
+ */
 export function QuickCreate({ draft, onClose }: { draft: Draft; onClose: () => void }) {
   const { create } = useItemChanges()
+  const narrow = useNarrow()
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState<ItemKind>(draft.time ? 'event' : 'task')
+  const [date, setDate] = useState<string | null>(draft.date)
+  const [time, setTime] = useState<string | null>(draft.time)
+  const [category, setCategory] = useState('')
+  const { data: recent = [] } = useItems({}, narrow)
+  const cats = useMemo(() => categories(recent).map((c) => c.tag).filter((t) => t !== NONE), [recent])
   const box = useRef<HTMLFormElement>(null)
   const [pos, setPos] = useState({ left: draft.x, top: draft.y })
   useLayoutEffect(() => {
     const r = box.current?.getBoundingClientRect()
-    if (!r) return
+    if (!r || narrow) return
     setPos({ left: Math.max(8, Math.min(draft.x, window.innerWidth - r.width - 8)), top: Math.max(8, Math.min(draft.y, window.innerHeight - r.height - 8)) })
-  }, [draft])
+  }, [draft, narrow])
   const make = (more: boolean) => {
     if (!title.trim()) return
+    const minutes = time ? (time === draft.time ? draft.minutes : 60) : null
     create.mutate(
-      { item: { kind, title: title.trim(), date: draft.date, time: draft.time, minutes: draft.minutes } },
+      {
+        item: {
+          kind,
+          title: title.trim(),
+          // An event needs a day; a task may have none.
+          date: date ?? (kind === 'event' ? today() : null),
+          time: date || kind === 'event' ? time : null,
+          minutes: kind === 'event' || time ? minutes : null,
+          ...(category ? { tags: [category] } : {}),
+        },
+      },
       {
         onSuccess: (it) => {
           if (more) openItem.set(it.id)
@@ -458,11 +554,12 @@ export function QuickCreate({ draft, onClose }: { draft: Draft; onClose: () => v
     )
   }
   const when = `${short(draft.date)}${draft.time ? ` · ${draft.time}-${hhmm(minutesOf(draft.time) + (draft.minutes ?? 60))}` : ' · all day'}`
-  return (
+  const t = today()
+  const form = (
     <form
       ref={box}
-      className="panel px-raised quick-create"
-      style={{ left: pos.left, top: pos.top }}
+      className={`panel px-raised quick-create ${narrow ? 'sheet' : ''}`}
+      style={narrow ? undefined : { left: pos.left, top: pos.top }}
       role="dialog"
       aria-label="new on the calendar"
       onSubmit={(e) => {
@@ -485,8 +582,44 @@ export function QuickCreate({ draft, onClose }: { draft: Draft; onClose: () => v
             {k}
           </button>
         ))}
-        <span className="dim">{when}</span>
+        {!narrow && <span className="dim">{when}</span>}
       </div>
+      {narrow && (
+        <>
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="day">
+            {kind === 'task' && (
+              <button type="button" className="chip" aria-pressed={date === null} onClick={() => setDate(null)}>
+                no day
+              </button>
+            )}
+            <button type="button" className="chip" aria-pressed={date === t} onClick={() => setDate(t)}>
+              today
+            </button>
+            <button type="button" className="chip" aria-pressed={date === plusDays(t, 1)} onClick={() => setDate(plusDays(t, 1))}>
+              tomorrow
+            </button>
+            <input type="date" className="field !w-auto" aria-label="pick a day" value={date ?? ''} onChange={(e) => setDate(e.target.value || null)} />
+          </div>
+          {(date || kind === 'event') && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" className="chip" aria-pressed={time === null} onClick={() => setTime(null)}>
+                all day
+              </button>
+              <input type="time" className="field !w-auto" aria-label="time" value={time ?? ''} onChange={(e) => setTime(e.target.value || null)} />
+            </div>
+          )}
+          {cats.length > 0 && (
+            <select className="field" aria-label="category" value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="">no category</option>
+              {cats.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          )}
+        </>
+      )}
       <div className="flex gap-2">
         <button type="submit" className="btn btn-sm btn-accent" disabled={!title.trim() || create.isPending}>
           save
@@ -499,5 +632,109 @@ export function QuickCreate({ draft, onClose }: { draft: Draft; onClose: () => v
         </button>
       </div>
     </form>
+  )
+  return narrow ? (
+    <>
+      <div className="sheet-scrim" onClick={onClose} aria-hidden />
+      {form}
+    </>
+  ) : (
+    form
+  )
+}
+
+// --- agenda -----------------------------------------------------------------
+
+/**
+ * The days ahead as one list, like Google Calendar's schedule: a heading per
+ * day that has something, then its all-day things and the rest by time.
+ * Today always shows, even empty. Reaching the end asks for more days.
+ */
+export function Agenda({ from, to, occ, onMore }: { from: string; to: string; occ: Occurrence[]; onMore: () => void }) {
+  const { update } = useItemChanges()
+  const occMenu = useOccurrenceMenu()
+  const end = useRef<HTMLDivElement>(null)
+  const t = today()
+
+  // Reaching the bottom loads more days.
+  useEffect(() => {
+    const el = end.current
+    if (!el) return
+    const seen = new IntersectionObserver((e) => e[0]?.isIntersecting && onMore(), { rootMargin: '200px' })
+    seen.observe(el)
+    return () => seen.disconnect()
+  }, [onMore])
+
+  const days = useMemo(() => {
+    const out: { day: string; list: Occurrence[] }[] = []
+    for (let d = from; d <= to; d = plusDays(d, 1)) {
+      const list = occ
+        .filter((o) => covers(o, d))
+        .sort((a, b) => Number(Boolean(a.item.time)) - Number(Boolean(b.item.time)) || (a.item.time ?? '').localeCompare(b.item.time ?? ''))
+      if (list.length || d === t) out.push({ day: d, list })
+    }
+    return out
+  }, [from, to, occ, t])
+
+  const open = (o: Occurrence) => {
+    openAt.set({ id: o.item.id, orig: o.orig })
+    openItem.set(o.item.id)
+  }
+  return (
+    <div className="agenda">
+      {days.map(({ day, list }) => {
+        const d = parse(day)
+        return (
+          <section key={day} className="agenda-day" data-today={day === t || undefined}>
+            <h3 className="agenda-date">
+              <b>{d.getDate()}</b>
+              <span>
+                {DAYS[weekday(d)].slice(0, 3)} {MONTHS[d.getMonth()].slice(0, 3)}
+              </span>
+              {day === t ? <span>today</span> : day === plusDays(t, 1) ? <span>tomorrow</span> : null}
+            </h3>
+            {list.length === 0 && <p className="dim">&gt; nothing on today.</p>}
+            <ul>
+              {list.map((o) => {
+                const it = o.item
+                return (
+                  <li
+                    key={o.key}
+                    className="agenda-row"
+                    style={colorStyle(it)}
+                    data-kind={it.kind}
+                    data-done={it.status === 'done' || undefined}
+                    onContextMenu={(e) => occMenu(e, o)}
+                  >
+                    {it.status ? (
+                      <input
+                        type="checkbox"
+                        className="check"
+                        checked={it.status === 'done'}
+                        aria-label={`done: ${titleOf(it)}`}
+                        onChange={(e) => update.mutate({ id: it.id, change: { status: e.target.checked ? 'done' : 'todo' } })}
+                      />
+                    ) : (
+                      <span className="agenda-bar" aria-hidden />
+                    )}
+                    <button type="button" className="agenda-title" onClick={() => open(o)}>
+                      <span className="agenda-when">
+                        {it.time ? `${it.time}${it.minutes ? `-${hhmm(minutesOf(it.time) + it.minutes)}` : ''}` : o.date !== o.end ? `until ${short(o.end)}` : 'all day'}
+                      </span>
+                      <span>{titleOf(it)}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )
+      })}
+      <div ref={end} className="agenda-end">
+        <button type="button" className="btn btn-sm" onClick={onMore}>
+          later days
+        </button>
+      </div>
+    </div>
   )
 }

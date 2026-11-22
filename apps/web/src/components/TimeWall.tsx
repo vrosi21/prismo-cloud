@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type TouchEvent as ReactTouchEvent } from 'react'
 import type { Item } from '../api'
 import { addDays, DAYS, iso, monthGrid, MONTHS, occurrences, parse, plusDays, short, today, weekday } from '../lib/days'
 import { categories, hidden, NONE, setHidden, shown, type Hidden } from '../lib/categories'
@@ -6,7 +6,8 @@ import { openItem, titleOf, useItemChanges, useItems } from '../lib/items'
 import { facing, WALLS } from '../lib/room'
 import { typing } from '../lib/spatial'
 import { useStore } from '../lib/store'
-import { MonthGrid, QuickCreate, TimeGrid, type Draft } from './CalendarViews'
+import { Agenda, MonthGrid, QuickCreate, TimeGrid, type Draft } from './CalendarViews'
+import { useNarrow, isNarrow } from '../lib/narrow'
 import { MoveChoice } from './Appearance'
 import { useItemEntries } from './Menus'
 import { openMenu } from '../lib/menu'
@@ -15,18 +16,29 @@ import { KeyCap } from './KeyCap'
 // The time wall: a calendar the way Google's works, and a task list beside
 // it. Everything on it is an item (see lib/items): an event has a day, a
 // task can be ticked off and may or may not have a day. Views: one day,
-// three days, a week, a month, and several months side by side.
+// three days, a week, a month, several months side by side, the days ahead
+// as a list (agenda), and the tasks on their own (tasks). On a phone: agenda,
+// tasks, day, 3 days and month; the side panel becomes a "filters" sheet.
 
-type View = 'day' | '3day' | 'week' | 'month' | 'months'
+type View = 'agenda' | 'tasks' | 'day' | '3day' | 'week' | 'month' | 'months'
 type Layout = '1x2' | '1x3' | '2x2'
 
 const VIEWS: { id: View; label: string; key: string }[] = [
+  { id: 'agenda', label: 'agenda', key: 'a' },
+  { id: 'tasks', label: 'tasks', key: 'l' },
   { id: 'day', label: 'day', key: 'd' },
   { id: '3day', label: '3 days', key: 'x' },
   { id: 'week', label: 'week', key: 'w' },
   { id: 'month', label: 'month', key: 'm' },
   { id: 'months', label: 'months', key: 'g' },
 ]
+// Too wide for a phone, and what shows instead there.
+const ON_PHONE: Partial<Record<View, View>> = { week: '3day', months: 'month' }
+// How far the tasks view looks back (late) and ahead (upcoming).
+const TASK_REACH = 366
+// Days the agenda shows at first, and adds each time the end is reached.
+const AGENDA_STEP = 30
+
 const LAYOUTS: { id: Layout; label: string; count: number; cols: number }[] = [
   { id: '1x2', label: '2 side by side', count: 2, cols: 2 },
   { id: '1x3', label: '3 side by side', count: 3, cols: 3 },
@@ -59,7 +71,11 @@ const addMonths = (day: string, n: number) => {
 }
 
 export function TimeWall() {
-  const [view, setViewState] = useState<View>(() => remembered('prismo.cal.view', 'week', VIEWS.map((v) => v.id)))
+  const narrow = useNarrow()
+  const [chosen, setViewState] = useState<View>(() => remembered('prismo.cal.view', isNarrow() ? 'agenda' : 'week', VIEWS.map((v) => v.id)))
+  const view = (narrow && ON_PHONE[chosen]) || chosen
+  const [agendaDays, setAgendaDays] = useState(AGENDA_STEP)
+  const [filters, setFilters] = useState(false)
   const [layout, setLayoutState] = useState<Layout>(() => remembered('prismo.cal.layout', '2x2', LAYOUTS.map((l) => l.id)))
   const [anchor, setAnchor] = useState(today)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -76,6 +92,14 @@ export function TimeWall() {
   // The days on screen, and the first and last day to ask the server for.
   const { days, from, to, title } = useMemo(() => {
     const a = parse(anchor)
+    if (view === 'agenda') {
+      const end = plusDays(anchor, agendaDays - 1)
+      return { days: [] as string[], from: anchor, to: end, title: anchor === today() ? 'from today' : `from ${short(anchor)}` }
+    }
+    if (view === 'tasks') {
+      const t = today()
+      return { days: [] as string[], from: plusDays(t, -TASK_REACH), to: plusDays(t, TASK_REACH), title: 'tasks' }
+    }
     if (view === 'month' || view === 'months') {
       const count = view === 'month' ? 1 : lay.count
       const grids = Array.from({ length: count }, (_, i) => monthGrid(a.getFullYear(), a.getMonth() + i))
@@ -101,7 +125,7 @@ export function TimeWall() {
           ? `${s.getDate()} - ${e.getDate()} ${MONTHS[s.getMonth()]} ${s.getFullYear()}`
           : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0, 3)} - ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3)} ${e.getFullYear()}`
     return { days: list, from: list[0], to: list[n - 1], title: t }
-  }, [anchor, view, lay.count])
+  }, [anchor, view, lay.count, agendaDays])
 
   const { data: all = [], isError } = useItems({ from, to, someday: true })
   // What the category filter lets through.
@@ -109,8 +133,13 @@ export function TimeWall() {
   const items = useMemo(() => all.filter((it) => shown(it, off)), [all, off])
   const occ = useMemo(() => occurrences(items, from, to), [items, from, to])
 
+  const moreDays = useCallback(() => setAgendaDays((n) => Math.min(n + AGENDA_STEP, 400)), [])
+  useEffect(() => setAgendaDays(AGENDA_STEP), [anchor])
+
   const step = (dir: 1 | -1) => {
-    if (view === 'month') setAnchor(addMonths(anchor, dir))
+    if (view === 'agenda') setAnchor(plusDays(anchor, dir * 7))
+    else if (view === 'tasks') return
+    else if (view === 'month') setAnchor(addMonths(anchor, dir))
     else if (view === 'months') setAnchor(addMonths(anchor, dir * lay.count))
     else setAnchor(plusDays(anchor, dir * (view === 'day' ? 1 : view === '3day' ? 3 : 7)))
   }
@@ -118,6 +147,25 @@ export function TimeWall() {
     setAnchor(day)
     setView('day')
   }
+
+  // A sideways swipe on day, 3 days or month goes back or forward. Not when
+  // it started on a chip: that may be a chip being moved.
+  const swipe = useRef<{ x: number; y: number } | null>(null)
+  const swipeStart = (e: ReactTouchEvent) => {
+    const t = e.touches[0]
+    swipe.current = e.touches.length === 1 && !(e.target as HTMLElement).closest('.cal-chip, .tg-block') ? { x: t.clientX, y: t.clientY } : null
+  }
+  const swipeEnd = (e: ReactTouchEvent) => {
+    const s = swipe.current
+    swipe.current = null
+    const t = e.changedTouches[0]
+    if (!s || !t || !['day', '3day', 'month'].includes(view)) return
+    const dx = t.clientX - s.x
+    const dy = t.clientY - s.y
+    if (Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy)) step(dx < 0 ? 1 : -1)
+  }
+  const newHere = (x: number, y: number) =>
+    setDraft({ date: days.includes(today()) || view.startsWith('month') || view === 'agenda' || view === 'tasks' ? today() : anchor, time: null, minutes: null, x, y })
 
   // Keys, as in Google Calendar: d x w m g pick a view, t is today, j/k or
   // n/p step, c makes something new. Only while this wall is faced.
@@ -132,7 +180,7 @@ export function TimeWall() {
       else if (e.key === 't') setAnchor(today())
       else if (e.key === 'j' || e.key === 'n') step(1)
       else if (e.key === 'k' || e.key === 'p') step(-1)
-      else if (e.key === 'c') setDraft({ date: anchor, time: null, minutes: null, x: window.innerWidth / 2 - 150, y: 120 })
+      else if (e.key === 'c') newHere(window.innerWidth / 2 - 150, 120)
       else return
       e.preventDefault()
     }
@@ -142,10 +190,26 @@ export function TimeWall() {
 
   return (
     <section className="time-wall" aria-label="time wall: calendar and tasks">
-      <aside className="time-side panel px">
-        <MiniMonth anchor={anchor} onPick={setAnchor} items={items} />
+      {narrow && filters && <div className="sheet-scrim" onClick={() => setFilters(false)} aria-hidden />}
+      <aside className={`time-side panel px ${narrow ? `sheet ${filters ? 'open' : ''}` : ''}`} aria-label="filters">
+        {narrow && (
+          <div className="flex items-center justify-between">
+            <h3 className="section-title uppercase !p-0">jump and filter</h3>
+            <button type="button" className="btn btn-sm" onClick={() => setFilters(false)} aria-label="close">
+              x
+            </button>
+          </div>
+        )}
+        <MiniMonth
+          anchor={anchor}
+          onPick={(d) => {
+            setAnchor(d)
+            setFilters(false)
+          }}
+          items={items}
+        />
         <Categories inRange={all} />
-        <TaskList items={items} anchor={anchor} />
+        {!narrow && <TaskList items={items} anchor={anchor} />}
       </aside>
       <MoveChoice />
 
@@ -164,7 +228,21 @@ export function TimeWall() {
           </div>
           <h2 className="time-title">{title}</h2>
           <span className="flex-1" />
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="view">
+          {narrow && (
+            <>
+              <select className="field !w-auto" aria-label="view" value={view} onChange={(e) => setView(e.target.value as View)}>
+                {VIEWS.filter((v) => !ON_PHONE[v.id]).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn btn-sm" aria-expanded={filters} onClick={() => setFilters(true)}>
+                filters
+              </button>
+            </>
+          )}
+          <div className={`flex flex-wrap items-center gap-2 ${narrow ? 'hidden' : ''}`} role="group" aria-label="view">
             {VIEWS.map((v) => (
               <button key={v.id} type="button" className="chip" aria-pressed={view === v.id} onClick={() => setView(v.id)} title={`${v.label} (${v.key})`}>
                 {v.label}
@@ -180,19 +258,20 @@ export function TimeWall() {
               </select>
             )}
           </div>
-          <button
-            type="button"
-            className="btn btn-sm btn-accent"
-            title="new (c)"
-            onClick={(e) => setDraft({ date: days.includes(today()) || view.startsWith('month') ? today() : anchor, time: null, minutes: null, x: e.clientX - 280, y: e.clientY + 16 })}
-          >
-            + new
-          </button>
+          {!narrow && (
+            <button type="button" className="btn btn-sm btn-accent" title="new (c)" onClick={(e) => newHere(e.clientX - 280, e.clientY + 16)}>
+              + new
+            </button>
+          )}
         </div>
         {isError && <p className="text-danger">&gt; the calendar could not be loaded.</p>}
 
-        <div className="time-view">
-          {view === 'month' ? (
+        <div className="time-view" onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
+          {view === 'agenda' ? (
+            <Agenda from={from} to={to} occ={occ} onMore={moreDays} />
+          ) : view === 'tasks' ? (
+            <TasksView items={items} anchor={anchor} />
+          ) : view === 'month' ? (
             <MonthGrid {...monthStart(anchor)} occ={occ} onDraft={setDraft} onDay={openDay} />
           ) : view === 'months' ? (
             <div className="months" style={{ gridTemplateColumns: `repeat(${lay.cols}, minmax(0, 1fr))` }}>
@@ -204,6 +283,11 @@ export function TimeWall() {
             <TimeGrid key={`${view}-${days[0]}`} days={days} occ={occ} onDraft={setDraft} />
           )}
         </div>
+        {narrow && (
+          <button type="button" className="fab btn btn-accent" aria-label="new event or task" onClick={() => newHere(0, 0)}>
+            +
+          </button>
+        )}
       </div>
       {draft && <QuickCreate draft={draft} onClose={() => setDraft(null)} />}
     </section>
@@ -261,24 +345,11 @@ function MiniMonth({ anchor, onPick, items }: { anchor: string; onPick: (day: st
  * Tasks the way Google Tasks keeps them: add one at the top; below, what is
  * late, what has no day, and what was ticked off lately.
  */
-function TaskList({ items, anchor }: { items: Item[]; anchor: string }) {
-  const { create, update } = useItemChanges()
+function TaskRow({ it }: { it: Item }) {
+  const { update } = useItemChanges()
   const itemEntries = useItemEntries()
-  const [title, setTitle] = useState('')
-  const [onDay, setOnDay] = useState(false)
-  const [showDone, setShowDone] = useState(false)
-  const t = today()
-  const tasks = items.filter((it) => it.kind === 'task')
-  const late = tasks.filter((it) => it.date && it.date < t && it.status !== 'done' && !it.repeat)
-  const someday = tasks.filter((it) => !it.date && it.status !== 'done')
-  const done = tasks.filter((it) => !it.date && it.status === 'done')
-  const add = (e: FormEvent) => {
-    e.preventDefault()
-    if (!title.trim()) return
-    create.mutate({ item: { kind: 'task', title: title.trim(), date: onDay ? anchor : null } }, { onSuccess: () => setTitle('') })
-  }
-  const row = (it: Item) => (
-    <li key={it.id} className="task" data-done={it.status === 'done' || undefined} data-status={it.status ?? undefined} onContextMenu={(e) => openMenu(e, itemEntries(it))}>
+  return (
+    <li className="task" data-done={it.status === 'done' || undefined} data-status={it.status ?? undefined} onContextMenu={(e) => openMenu(e, itemEntries(it))}>
       <input
         type="checkbox"
         className="check"
@@ -289,19 +360,128 @@ function TaskList({ items, anchor }: { items: Item[]; anchor: string }) {
       <button type="button" className="task-title" onClick={() => openItem.set(it.id)}>
         {titleOf(it)}
       </button>
-      {it.date && <span className="task-time">{short(it.date)}</span>}
+      {it.date && (
+        <span className="task-time">
+          {short(it.date)}
+          {it.time ? ` ${it.time}` : ''}
+        </span>
+      )}
     </li>
   )
+}
+
+/** A line to add a task, and whether it goes on the day being looked at. */
+function AddTask({ anchor }: { anchor: string }) {
+  const { create } = useItemChanges()
+  const [title, setTitle] = useState('')
+  const [onDay, setOnDay] = useState(false)
+  const t = today()
+  const add = (e: FormEvent) => {
+    e.preventDefault()
+    if (!title.trim()) return
+    create.mutate({ item: { kind: 'task', title: title.trim(), date: onDay ? anchor : null } }, { onSuccess: () => setTitle('') })
+  }
+  return (
+    <form className="flex flex-col gap-2" onSubmit={add}>
+      <input className="field" placeholder="add a task" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} aria-label="new task" />
+      <label className="flex items-center gap-2 text-[18px]">
+        <input type="checkbox" className="check check-sm" checked={onDay} onChange={(e) => setOnDay(e.target.checked)} />
+        on {anchor === t ? 'today' : short(anchor)}
+      </label>
+    </form>
+  )
+}
+
+/**
+ * The tasks on their own, the way Google Tasks lists them: late, today, the
+ * days ahead (a repeating task once, at its next day), no day, and done.
+ */
+function TasksView({ items, anchor }: { items: Item[]; anchor: string }) {
+  const [showDone, setShowDone] = useState(false)
+  const t = today()
+  const { late, todays, ahead, someday, done } = useMemo(() => {
+    const tasks = items.filter((it) => it.kind === 'task')
+    const open = tasks.filter((it) => it.status !== 'done')
+    // A repeat shows once: at its first day from today on.
+    const next = new Map<string, string>()
+    for (const o of occurrences(
+      open.filter((it) => it.repeat),
+      t,
+      plusDays(t, TASK_REACH),
+    )) {
+      if (!next.has(o.item.id)) next.set(o.item.id, o.date)
+    }
+    const dayOf = (it: Item) => (it.repeat ? (next.get(it.id) ?? null) : it.date)
+    const dated = open.filter((it) => dayOf(it)).map((it) => ({ it: { ...it, date: dayOf(it) }, day: dayOf(it)! }))
+    const byDay = new Map<string, Item[]>()
+    for (const { it, day } of dated.filter((d) => d.day > t).sort((a, b) => a.day.localeCompare(b.day) || (a.it.time ?? '').localeCompare(b.it.time ?? ''))) {
+      byDay.set(day, [...(byDay.get(day) ?? []), it])
+    }
+    return {
+      late: dated.filter((d) => d.day < t).map((d) => d.it),
+      todays: dated.filter((d) => d.day === t).map((d) => d.it),
+      ahead: [...byDay.entries()],
+      someday: open.filter((it) => !it.date && !it.repeat),
+      done: tasks
+        .filter((it) => it.status === 'done')
+        .sort((a, b) => (b.done_at ?? '').localeCompare(a.done_at ?? ''))
+        .slice(0, 50),
+    }
+  }, [items, t])
+  const list = (xs: Item[]) => (
+    <ul>
+      {xs.map((it) => (
+        <TaskRow key={it.id} it={it} />
+      ))}
+    </ul>
+  )
+  return (
+    <div className="tasks-view">
+      <AddTask anchor={anchor} />
+      {late.length > 0 && (
+        <div>
+          <span className="label text-danger">late</span>
+          {list(late)}
+        </div>
+      )}
+      <div>
+        <span className="label">today</span>
+        {todays.length === 0 ? <p className="dim">&gt; nothing due today.</p> : list(todays)}
+      </div>
+      {ahead.map(([day, xs]) => (
+        <div key={day}>
+          <span className="label">{day === plusDays(t, 1) ? 'tomorrow' : short(day)}</span>
+          {list(xs)}
+        </div>
+      ))}
+      <div>
+        <span className="label">no day</span>
+        {someday.length === 0 ? <p className="dim">&gt; nothing waiting.</p> : list(someday)}
+      </div>
+      {done.length > 0 && (
+        <div>
+          <button type="button" className="label link-btn" onClick={() => setShowDone(!showDone)} aria-expanded={showDone}>
+            done ({done.length}) {showDone ? 'v' : '>'}
+          </button>
+          {showDone && list(done)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TaskList({ items, anchor }: { items: Item[]; anchor: string }) {
+  const [showDone, setShowDone] = useState(false)
+  const t = today()
+  const tasks = items.filter((it) => it.kind === 'task')
+  const late = tasks.filter((it) => it.date && it.date < t && it.status !== 'done' && !it.repeat)
+  const someday = tasks.filter((it) => !it.date && it.status !== 'done')
+  const done = tasks.filter((it) => !it.date && it.status === 'done')
+  const row = (it: Item) => <TaskRow key={it.id} it={it} />
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <h3 className="section-title uppercase !p-0">tasks</h3>
-      <form className="flex flex-col gap-2" onSubmit={add}>
-        <input className="field" placeholder="add a task" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} aria-label="new task" />
-        <label className="flex items-center gap-2 text-[18px]">
-          <input type="checkbox" className="check check-sm" checked={onDay} onChange={(e) => setOnDay(e.target.checked)} />
-          on {anchor === t ? 'today' : short(anchor)}
-        </label>
-      </form>
+      <AddTask anchor={anchor} />
       <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
         {late.length > 0 && (
           <div>

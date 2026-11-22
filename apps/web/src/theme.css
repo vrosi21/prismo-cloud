@@ -1201,3 +1201,36 @@ input.board-group-label { width: 280px; height: auto; }
   .board-dot { opacity: 1; }
   .select-box { opacity: 1; }
 }
+
+/* --- Agenda and tasks views (CalendarViews.tsx Agenda, TimeWall.tsx TasksView) */
+.agenda, .tasks-view { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 14px; overflow-y: auto; padding-right: 4px; }
+.agenda-day { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 4px 10px; }
+.agenda-date { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding-top: 4px; color: var(--ink-dim); font-family: var(--font-pixel); font-size: 7px; text-transform: uppercase; }
+.agenda-date b { color: var(--ink); font-size: 16px; font-weight: normal; }
+.agenda-day[data-today] .agenda-date b { padding: 2px 4px; background: var(--accent); color: var(--on-accent); }
+.agenda-day > p, .agenda-day > ul { grid-column: 2; }
+.agenda-day > ul { display: flex; flex-direction: column; gap: 4px; }
+.agenda-row { --chip: var(--accent); display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; background: color-mix(in srgb, var(--chip) 22%, var(--panel)); }
+.agenda-row[data-kind="task"] { background: var(--panel); box-shadow: inset 0 0 0 1px var(--chip); }
+.agenda-row[data-done] { opacity: 0.55; }
+.agenda-row[data-done] .agenda-title span:last-child { text-decoration: line-through; }
+.agenda-bar { flex: none; width: calc(var(--px) * 2); align-self: stretch; background: var(--chip); }
+.agenda-title { display: flex; min-width: 0; flex: 1; flex-direction: column; align-items: flex-start; gap: 2px; color: var(--ink); text-align: left; line-height: 1.15; overflow-wrap: anywhere; cursor: pointer; }
+.agenda-when { color: var(--ink-dim); font-family: var(--font-pixel); font-size: 7px; }
+.agenda-end { display: flex; justify-content: center; padding: 8px 0 72px; }
+.tasks-view { gap: 12px; }
+.tasks-view ul { display: flex; flex-direction: column; }
+
+/* A sheet: comes up from the bottom of a phone screen, over a dark scrim. */
+.sheet-scrim { position: fixed; inset: 0; z-index: 64; background: rgb(0 0 0 / 0.45); }
+.quick-create.sheet { left: 0; right: 0; bottom: 0; width: auto; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+.fab { position: absolute; right: 16px; bottom: 16px; z-index: 5; width: 56px; height: 56px; font-size: 20px; }
+.time-main { position: relative; }
+@media (max-width: 640px) {
+  .time-wall { overflow: visible; }
+  .time-main { min-height: 0; padding: 8px; }
+  .time-side.sheet { display: none; }
+  .time-side.sheet.open { position: fixed; z-index: 65; left: 0; right: 0; bottom: 0; display: flex; max-height: 80dvh; overflow-y: auto; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .time-bar { gap: 8px; }
+  .time-title { font-size: 10px; }
+}
