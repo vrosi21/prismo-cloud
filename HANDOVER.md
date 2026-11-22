@@ -314,7 +314,32 @@ screen switching camera feeds: no swing, at most a moment of static.
   Waiting on the user: a plan token in Settings + `install-skill.ps1`, then
   starting the secretary session.
 
+- Step 19 (2026-11-22, user: "make the phone ui/ux better", "migrate from
+  Google tasks and calendar", the Apps Script and BMO off, a look switch in
+  the footer; plan in ~/.claude/plans/unified-sleeping-forest.md). Done,
+  committed, not pushed:
+  - installable app: manifest, pixel icons (`scripts/make-icons.mjs`),
+    service worker for the app shell (cae3187);
+  - phone shell: wall tabs, opens on the last wall, touch sizes, the item
+    page full screen with a "..." menu, bottom-sheet menus (e20140b);
+  - calendar: agenda and tasks views, quick add sheet, touch that scrolls,
+    swipe (bc3847a);
+  - calendars with colours and groups (migration 0013, `/v1/calendars`),
+    import from Google (`lib/gimport.ts`, `components/GoogleImport.tsx`)
+    (ef467fd);
+  - looks 8-bit / 16-bit / smooth (e243d69); boards pinch, notebook and
+    files on touch (e85509b).
+  BMO switched off on the server (8 trigger workflows of the n8n project
+  inactive, n8n restarted, nothing deleted; DSAI Vault only logs that BMO
+  did not answer). Not run: Go tests and the smoke test (Docker Desktop
+  stuck on its leftover-socket error; CI runs both on push). Waiting on the
+  user: the Apps Script's triggers deleted, a Google Takeout, push.
+
 ## Ideas for next time
+
+- **Reminders and notifications** (next round, user 2026-11-22): desktop
+  and phone, the server keeps the schedule (worker job), web push to the
+  installed app. BMO's Telegram reminders are off until then.
 
 - Settings, restructured: its own side panel to the right of the main one,
   sections in it (tokens, sign-in, look, helper) instead of one long page

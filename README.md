@@ -93,16 +93,33 @@ across all folders.
 The app is a room with four walls; `Ctrl` and an arrow faces one, `Backspace` turns
 back to the files. Up is the files, right is time (calendar and tasks), left is the
 lookout (notebooks and boards), down is wishes (Prismo's face; empty for now).
-Settings lists every key.
+The tabs in the top bar (on a phone, along the bottom) face them too, and the app
+opens on the wall it was left on. Settings lists every key.
+
+**On a phone**: install it from Chrome's menu ("Install app"): it opens full screen with
+its own icon and starts without a connection (`public/manifest.webmanifest`,
+`public/sw.js`, which keeps the app itself and never the files or items). Up to 640px
+wide the layout is the phone one: an item opens as a whole page with a "..." menu,
+long-press menus come up from the bottom, the calendar opens on the agenda with a "+"
+for quick add, boards pinch to zoom. `pnpm build`, then `node apps/web/mock/preview.mjs`
+serves the built app against the mock, to try the installed app and the service worker.
+
+**Looks**: 8-bit (big pixels), 16-bit (finer pixels, Pixelify Sans and Silkscreen) or
+smooth (no pixels, the system font); the chip in the footer switches, any look goes
+with any theme.
 
 **Files**: folders and files. "filters" narrows what is shown by type, size, the day it
 was added and who can open it, and orders it (newest, oldest, biggest, smallest, by
 name). Inside a folder the filters narrow that folder; at the top they look through
 every folder. It all lives in the URL, so a filtered view can be bookmarked.
 
-**Time**: a calendar like Google's. Views: day, 3 days, week, month, and months (2 or 3
-side by side, or 4 in a square); keys `d` `x` `w` `m` `g`, `t` for today, `j`/`k` to
-step, `c` for new. Drag on the hours to make an event, drag one to move it, drag its
+**Time**: a calendar like Google's. Views: agenda (the days ahead as one list), tasks
+(late, today, the days ahead, no day, done, like Google Tasks), day, 3 days, week, month,
+and months (2 or 3 side by side, or 4 in a square); keys `a` `l` `d` `x` `w` `m` `g`,
+`t` for today, `j`/`k` to step, `c` for new.
+With a finger, a chip is picked up by holding it still for a moment (held without
+moving, it opens its menu), a tap on an empty hour makes an event there, and a sideways
+swipe steps the days. Drag on the hours to make an event, drag one to move it, drag its
 bottom edge to make it longer; in a month, drag a day to another day. Beside it the
 tasks: what is late, what has no day, what was done lately. A repeating task ticked off
 moves to its next day that is not past; a repeat can have a last day ("until").
@@ -112,10 +129,21 @@ or "this one" in its panel) asks "only this one / this and later ones / all of t
 one can have its own title ("rf lab 2 + lab 1 defense") or be skipped. Cards and pins
 show the *next* appearance: a weekly lab that went by shows next week's.
 
-**Categories** come from tags, with nothing to set up: a plain tag (`dsai`) is a
-category, a `key:value` tag (`course:mai3`, `type:exam`) a filter inside it. The
-calendar lists them like Google's calendars: switch one off, show one "only", or open it
-to switch off a course or a type.
+**Calendars** come from tags, with nothing to set up: a plain tag (`dsai`) is a
+calendar, a `key:value` tag (`course:mai3`, `type:exam`) a filter inside it. The
+calendar lists them like Google's: switch one off, show one "only", or open it to switch
+off a course or a type. "edit" gives one a name, a colour, a group (me, study, work,
+projects) and colours by tag; "tag colours" sets the ones every calendar shares. A
+chip's colour is the item's own, else its tag's (`type:exam` red), else its calendar's
+(`/v1/calendars`, migration 0013). The projects group (calendars whose items live under
+the `projects` folder) starts switched off, so projects do not mix into the main view.
+
+**Import from Google** (Settings, or the calendar's side panel) brings Google Calendar
+(.ics) and Google Tasks (Takeout's Tasks.json, or the whole Takeout .zip) over. A
+preview shows each Google calendar and list and where it would go; calendars that only
+copy tasks, and Google's doubles, stay out, and so does anything already in Prismo, so
+importing twice adds nothing ([apps/web/src/lib/gimport.ts](apps/web/src/lib/gimport.ts)
+says what is matched how).
 
 **Lookout**: notebooks and boards. A notebook types like a normal editor and is
 Markdown underneath (the "md" button shows it): `# ` is a heading, `- [ ] ` a checkbox,
