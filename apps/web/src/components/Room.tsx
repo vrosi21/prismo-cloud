@@ -24,8 +24,15 @@ export function Room({ children }: { children: ReactNode }) {
   const lastFocus = useRef<(HTMLElement | null)[]>([])
   const { key: page } = useLocation()
 
-  // Going anywhere (a link, a search, a command) is going somewhere in the files.
-  useEffect(() => turnTo(0), [page])
+  // Going anywhere (a link, a search, a command) is going somewhere in the
+  // files. Not the first page shown: the app opens on the wall it was left on.
+  // (A change of page, not a first run: React runs effects twice in development.)
+  const shown = useRef(page)
+  useEffect(() => {
+    if (shown.current === page) return
+    shown.current = page
+    turnTo(0)
+  }, [page])
 
   // Ctrl and an arrow faces that wall. Not while typing, where Ctrl and an
   // arrow jumps a word, and not while a dialog is open. Backspace on another
@@ -143,33 +150,35 @@ function WallMap({ here }: { here: string }) {
   )
 }
 
+// The order on the tabs: the files, then what is used most.
+const TAB_ORDER = ['files', 'time', 'lookout', 'wishes']
+
 /**
- * Four arrows in a cross, like a game pad: the lit one is the wall faced.
- * Pressing one turns to that wall; arrow keys move between them.
+ * The walls as tabs with their names. In the top bar on a wide screen; on a
+ * phone a bar along the bottom, under the thumb. Ctrl and an arrow still
+ * turns, so each tab says which arrow in its tooltip.
  */
-export function Compass() {
+export function WallTabs({ where }: { where: 'top' | 'bottom' }) {
   const f = useStore(facing)
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <div className="compass" role="group" aria-label="walls of the room">
-        {WALLS.map((w, i) => (
+    <nav className={`wall-tabs wall-tabs-${where}`} aria-label="walls of the room">
+      {TAB_ORDER.map((id) => {
+        const i = WALLS.findIndex((w) => w.id === id)
+        const w = WALLS[i]
+        return (
           <button
             key={w.id}
             type="button"
-            className={`compass-${w.key}`}
+            className="wall-tab"
             aria-pressed={f.wall === i}
-            aria-label={`face ${w.name}, ctrl ${w.key}`}
-            title={`${w.name} (ctrl + ${w.key})`}
+            title={`${w.tab} (ctrl + ${w.key})`}
             onClick={() => turnTo(i)}
           >
             <Arrow dir={w.key} scale={1} />
+            <span>{w.tab}</span>
           </button>
-        ))}
-        <span className="compass-hub" aria-hidden />
-      </div>
-      <span className="pixel hidden w-[64px] text-[8px] uppercase lg:inline" aria-live="polite">
-        {WALLS[f.wall].name}
-      </span>
-    </div>
+        )
+      })}
+    </nav>
   )
 }

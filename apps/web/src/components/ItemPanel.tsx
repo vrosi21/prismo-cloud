@@ -12,6 +12,8 @@ import { useContentSaver } from '../lib/saver'
 import { useStore } from '../lib/store'
 import { Boundary } from './Boundary'
 import { Cube } from './sprites'
+import { useItemEntries } from './Menus'
+import { openMenu } from '../lib/menu'
 
 const NotebookEditor = lazy(() => import('./NotebookEditor'))
 
@@ -63,6 +65,7 @@ function ItemView({ id, onClose }: { id: string; onClose: () => void }) {
 export function ItemForm({ item, onClose, full = false }: { item: Item; onClose?: () => void; full?: boolean }) {
   const { update, trash, create } = useItemChanges()
   const whole = useWholeItem()
+  const entries = useItemEntries()
   const [title, setTitle] = useState(item.title)
   useEffect(() => setTitle(item.title), [item.title])
   const set = (change: ItemChange) => update.mutate({ id: item.id, change })
@@ -95,9 +98,14 @@ export function ItemForm({ item, onClose, full = false }: { item: Item; onClose?
           onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
         />
         {onClose && (
-          <button type="button" className="btn btn-sm" onClick={onClose} aria-label="close">
-            x
-          </button>
+          <>
+            <button type="button" className="btn btn-sm" onClick={(e) => openMenu(e, entries(item).slice(1))} aria-label="more" title="more: pin, move, trash">
+              ...
+            </button>
+            <button type="button" className="btn btn-sm" onClick={onClose} aria-label="close">
+              x
+            </button>
+          </>
         )}
       </div>
 

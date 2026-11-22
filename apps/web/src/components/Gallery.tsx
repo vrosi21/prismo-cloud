@@ -292,7 +292,7 @@ function AssetCard({ index, asset, size, selected, selection, selecting, selecta
               e.stopPropagation()
               onSelect(asset, e.shiftKey ? 'range' : 'toggle')
             }}
-            className={`absolute right-[6px] top-[6px] flex h-[22px] w-[22px] cursor-pointer items-center justify-center text-[18px] leading-none px ${
+            className={`select-box absolute right-[6px] top-[6px] flex h-[22px] w-[22px] cursor-pointer items-center justify-center text-[18px] leading-none px ${
               selected ? 'bg-accent text-on-accent' : 'bg-panel text-ink opacity-0 focus:opacity-100 group-hover:opacity-100'
             } ${selecting ? '!opacity-100' : ''}`}
           >

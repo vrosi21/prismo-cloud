@@ -68,7 +68,7 @@ export function AssetModal({ asset, folders, onClose, onStep }: Props) {
   return (
     <div ref={dialog} className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-8" role="dialog" aria-modal="true" aria-label={displayName(asset)}>
       <div className="absolute inset-0 bg-black/75" onClick={onClose} />
-      <div className="panel px pop relative flex max-h-full w-full max-w-[1180px] flex-col overflow-hidden md:flex-row">
+      <div className="panel px pop relative flex max-h-full w-full max-w-[1180px] flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         <div
           ref={stage}
           tabIndex={-1}
@@ -108,14 +108,14 @@ function Preview({ asset }: { asset: Asset }) {
         muted
         loop
         playsInline
-        className="max-h-[78vh] max-w-full"
+        className="max-h-[60dvh] md:max-h-[78vh] max-w-full"
       />
     )
   }
   if (asset.kind === 'file') {
     return <p className="dim">&gt; no preview for {asset.mime}</p>
   }
-  return <img key={asset.id} src={asset.urls.file} alt={displayName(asset)} className="max-h-[78vh] max-w-full object-contain" />
+  return <img key={asset.id} src={asset.urls.file} alt={displayName(asset)} className="max-h-[60dvh] md:max-h-[78vh] max-w-full object-contain" />
 }
 
 function Details({ asset, folders, onClose }: { asset: Asset; folders: FolderNode[]; onClose: () => void }) {

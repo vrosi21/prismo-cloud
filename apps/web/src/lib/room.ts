@@ -11,6 +11,8 @@ import type { ArrowDir } from '../components/sprites'
 export interface Wall {
   id: string
   name: string
+  /** Its name on the tabs: what is on it, in plain words. */
+  tab: string
   /** The arrow that faces it (with Ctrl). */
   key: ArrowDir
   blurb: string
@@ -20,11 +22,12 @@ export interface Wall {
 
 // Clockwise from the front, so the next one along is a quarter turn right.
 export const WALLS: Wall[] = [
-  { id: 'files', name: 'files', key: 'up', blurb: 'the library: folders, pictures, everything you saved.', ideas: [] },
-  { id: 'time', name: 'time', key: 'right', blurb: 'tasks and the calendar.', ideas: [] },
+  { id: 'files', name: 'files', tab: 'files', key: 'up', blurb: 'the library: folders, pictures, everything you saved.', ideas: [] },
+  { id: 'time', name: 'time', tab: 'calendar', key: 'right', blurb: 'tasks and the calendar.', ideas: [] },
   {
     id: 'wishes',
     name: 'wishes',
+    tab: 'wishes',
     key: 'down',
     blurb: 'prismo grants wishes: the things you want close at hand.',
     ideas: [
@@ -35,7 +38,7 @@ export const WALLS: Wall[] = [
       'mail: letters fly out of the window on the right when sent (planned)',
     ],
   },
-  { id: 'lookout', name: 'lookout', key: 'left', blurb: 'notebooks and boards.', ideas: [] },
+  { id: 'lookout', name: 'lookout', tab: 'notebooks', key: 'left', blurb: 'notebooks and boards.', ideas: [] },
 ]
 
 export const wallFor = (key: ArrowDir) => WALLS.findIndex((w) => w.key === key)
@@ -47,8 +50,26 @@ export interface Facing {
   n: number
 }
 
-export const facing = createStore<Facing>({ wall: 0, n: 0 })
+// The wall faced is remembered, so the app opens where it was left (most of
+// all the installed app on a phone). Storage may be unavailable; then it
+// opens on the files.
+const SAVED = 'prismo.wall'
+function savedWall(): number {
+  try {
+    const i = Number(localStorage.getItem(SAVED))
+    return Number.isInteger(i) && i >= 0 && i < WALLS.length ? i : 0
+  } catch {
+    return 0
+  }
+}
+
+export const facing = createStore<Facing>({ wall: savedWall(), n: 0 })
 
 export function turnTo(wall: number) {
   facing.set((f) => (f.wall === wall ? f : { wall, n: f.n + 1 }))
+  try {
+    localStorage.setItem(SAVED, String(wall))
+  } catch {
+    /* not remembered */
+  }
 }

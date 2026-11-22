@@ -70,7 +70,7 @@ export function ShareDialog({ target, name, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-[65] flex items-start justify-center overflow-y-auto px-3 py-[10vh]" role="dialog" aria-modal="true" aria-label={`share ${name}`}>
+    <div className="fixed inset-0 z-[65] flex items-start justify-center overflow-y-auto px-3 py-[10dvh]" role="dialog" aria-modal="true" aria-label={`share ${name}`}>
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="panel px-raised pop relative flex w-full max-w-[620px] flex-col gap-4 p-5">
         <div className="flex items-start justify-between gap-3">

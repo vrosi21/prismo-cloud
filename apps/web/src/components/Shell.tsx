@@ -14,7 +14,7 @@ import { Boot, LogLines, Palette, UploadTray, type Command } from './Overlays'
 import { ItemDrawer } from './ItemPanel'
 import { Menus } from './Menus'
 import { folderEntries, openMenu } from '../lib/menu'
-import { Compass, Room } from './Room'
+import { Room, WallTabs } from './Room'
 import { BmoFace, Cube, Twist, type Mood } from './sprites'
 import { turnTo } from '../lib/room'
 
@@ -154,13 +154,16 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
           <h1 className="hidden sm:block">PRISMO CLOUD</h1>
         </Link>
         {me.member ? <SearchBox key={params.get('q') ?? ''} initial={params.get('q') ?? ''} onSearch={search} /> : <span className="flex-1" />}
-        <Compass />
-        <button type="button" className="btn hidden sm:inline-flex" onClick={() => setPaletteOpen(true)} title="commands (Ctrl+K)">
+        <WallTabs where="top" />
+        <button type="button" className="btn hidden lg:inline-flex" onClick={() => setPaletteOpen(true)} title="commands (Ctrl+K)">
           ctrl+k
         </button>
         {canUpload && (
-          <button type="button" className="btn btn-accent" onClick={() => picker.current?.click()}>
-            upload
+          <button type="button" className="btn btn-accent" onClick={() => picker.current?.click()} aria-label="upload">
+            <span className="sm:hidden" aria-hidden>
+              +
+            </span>
+            <span className="hidden sm:inline">upload</span>
           </button>
         )}
         <input
@@ -176,6 +179,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
       </header>
 
       <Room>
+        {menuOpen && <button type="button" className="drawer-scrim md:hidden" aria-label="close the menu" onClick={() => setMenuOpen(false)} />}
         <Sidebar open={menuOpen} member={me.member} tree={tree} />
         <main className="screen-door min-w-0 flex-1">{children}</main>
       </Room>
@@ -183,6 +187,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
       {me.member && <ItemDrawer />}
       {me.member && <Menus />}
       <StatusBar email={me.user.email} member={me.member} />
+      <WallTabs where="bottom" />
       <LogLines />
       <UploadTray />
       {paletteOpen && <Palette commands={commands} onSearch={search} onClose={() => setPaletteOpen(false)} />}
@@ -323,9 +328,7 @@ function Sidebar({ open, member, tree }: { open: boolean; member: boolean; tree:
 
   return (
     <nav
-      className={`panel px w-[250px] shrink-0 flex-col gap-4 overflow-y-auto py-3 md:flex ${
-        open ? 'absolute bottom-[52px] left-3 top-[70px] z-30 flex' : 'hidden'
-      }`}
+      className={`panel px w-[250px] shrink-0 flex-col gap-4 overflow-y-auto py-3 md:flex ${open ? 'files-drawer flex' : 'hidden'}`}
       aria-label="files"
     >
       {/* A guest has no library of their own, only what was shared. */}
@@ -411,7 +414,7 @@ function StatusBar({ email, member }: { email: string; member: boolean }) {
   const nextTheme = THEMES[(THEMES.findIndex((t) => t.id === theme) + 1) % THEMES.length]
 
   return (
-    <footer className="panel px relative z-20 mx-3 mb-3 flex h-[30px] shrink-0 items-center gap-4 overflow-hidden px-2 text-[18px]">
+    <footer className="status-bar panel px relative z-20 mx-3 mb-3 flex h-[30px] shrink-0 items-center gap-4 overflow-hidden px-2 text-[18px]">
       <BmoFace mood={mood} scale={1.5} />
       <span className="shrink-0">{text}</span>
       {stats && member && (

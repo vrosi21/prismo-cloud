@@ -9,6 +9,7 @@ import { openAt, skipAppearance } from '../lib/repeats'
 import { pinOf, sectionsOf, withPin } from '../lib/pins'
 import { useFolderTree } from '../lib/queries'
 import { useStore } from '../lib/store'
+import { useNarrow } from '../lib/narrow'
 import { FolderPanel } from './FolderPanel'
 import { FolderPick } from './FolderPick'
 
@@ -24,6 +25,7 @@ export function Menus() {
 
 function ContextMenu() {
   const m = useStore(menu)
+  const narrow = useNarrow()
   const box = useRef<HTMLDivElement>(null)
   const [at, setAt] = useState<{ x: number; y: number } | null>(null)
 
@@ -43,6 +45,10 @@ function ContextMenu() {
   useEffect(() => {
     if (!m) return
     const close = () => menu.set(null)
+    // A phone's address bar or keyboard changes the height; only a real
+    // change of width (a turned phone, a resized window) closes the menu.
+    const width = window.innerWidth
+    const onResize = () => window.innerWidth !== width && close()
     const onDown = (e: PointerEvent) => !box.current?.contains(e.target as Node) && close()
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -57,13 +63,13 @@ function ContextMenu() {
     }
     window.addEventListener('pointerdown', onDown, true)
     window.addEventListener('keydown', onKey, true)
-    window.addEventListener('resize', close)
+    window.addEventListener('resize', onResize)
     window.addEventListener('blur', close)
     window.addEventListener('wheel', close, { passive: true })
     return () => {
       window.removeEventListener('pointerdown', onDown, true)
       window.removeEventListener('keydown', onKey, true)
-      window.removeEventListener('resize', close)
+      window.removeEventListener('resize', onResize)
       window.removeEventListener('blur', close)
       window.removeEventListener('wheel', close)
     }
@@ -77,7 +83,7 @@ function ContextMenu() {
   return (
     <div
       ref={box}
-      className="context-menu panel px-raised"
+      className={`context-menu panel px-raised ${narrow ? 'sheet' : ''}`}
       role="menu"
       style={{ left: at?.x ?? m.x, top: at?.y ?? m.y, visibility: at ? 'visible' : 'hidden' }}
       onContextMenu={(e) => e.preventDefault()}
@@ -122,7 +128,7 @@ function Dialogs() {
   if (!d) return null
   const close = () => dialog.set(null)
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 pt-[18vh]" role="dialog" aria-modal="true" aria-label={d.kind === 'folder' ? `folder: ${d.action}` : 'move to a folder'}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 pt-[12dvh]" role="dialog" aria-modal="true" aria-label={d.kind === 'folder' ? `folder: ${d.action}` : 'move to a folder'}>
       <div className="absolute inset-0 bg-black/60" onClick={close} />
       <div className="relative w-full max-w-[620px]">
         {d.kind === 'folder' ? (

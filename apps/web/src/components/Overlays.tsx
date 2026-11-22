@@ -168,7 +168,7 @@ export function Palette({ commands, onSearch, onClose }: PaletteProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center px-3 pt-[14vh]" role="dialog" aria-modal="true" aria-label="commands">
+    <div className="fixed inset-0 z-[70] flex items-start justify-center px-3 pt-[14dvh]" role="dialog" aria-modal="true" aria-label="commands">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="panel px-raised pop relative w-full max-w-[560px]">
         <div className="flex items-center gap-2 px-3 py-2">
@@ -189,7 +189,7 @@ export function Palette({ commands, onSearch, onClose }: PaletteProps) {
             style={{ caretShape: 'block' } as CSSProperties}
           />
         </div>
-        <ul className="max-h-[46vh] overflow-y-auto pb-2">
+        <ul className="max-h-[46dvh] overflow-y-auto pb-2">
           {matches.map((c, i) => (
             <li key={c.id}>
               <button
