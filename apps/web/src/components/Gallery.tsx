@@ -245,7 +245,7 @@ function AssetCard({ index, asset, size, selected, selection, selecting, selecta
             className={`h-full w-full ${asset.kind === 'sticker' ? 'checker object-contain' : 'object-cover'}`}
           />
         ) : (
-          <div className="pixel flex h-full w-full flex-col items-center justify-center gap-3 text-[9px] uppercase text-dim">
+          <div className="pixel flex h-full w-full flex-col items-center justify-center gap-3 text-[length:calc(9px*var(--fp))] uppercase text-dim">
             {ready && (
               <>
                 <FileIcon scale={4} />
@@ -258,13 +258,13 @@ function AssetCard({ index, asset, size, selected, selection, selecting, selecta
         {asset.status === 'processing' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-deep/85">
             <Cube size={30} label="processing" />
-            <span className="text-[17px]">processing...</span>
+            <span className="text-[length:calc(17px*var(--ft))]">processing...</span>
           </div>
         )}
         {asset.status === 'failed' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg-deep/90 px-2 text-center">
             <BmoFace mood="sad" />
-            <span className="text-[17px] text-danger">{asset.error ?? 'failed'}</span>
+            <span className="text-[length:calc(17px*var(--ft))] text-danger">{asset.error ?? 'failed'}</span>
           </div>
         )}
 
@@ -292,7 +292,7 @@ function AssetCard({ index, asset, size, selected, selection, selecting, selecta
               e.stopPropagation()
               onSelect(asset, e.shiftKey ? 'range' : 'toggle')
             }}
-            className={`select-box absolute right-[6px] top-[6px] flex h-[22px] w-[22px] cursor-pointer items-center justify-center text-[18px] leading-none px ${
+            className={`select-box absolute right-[6px] top-[6px] flex h-[22px] w-[22px] cursor-pointer items-center justify-center text-[length:calc(18px*var(--ft))] leading-none px ${
               selected ? 'bg-accent text-on-accent' : 'bg-panel text-ink opacity-0 focus:opacity-100 group-hover:opacity-100'
             } ${selecting ? '!opacity-100' : ''}`}
           >

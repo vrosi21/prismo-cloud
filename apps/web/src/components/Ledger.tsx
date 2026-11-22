@@ -91,7 +91,7 @@ export function Ledger() {
           <li key={(b.notes[0] ?? b.changes[0]).id} className="ledger-block panel px">
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="tag-chip">{b.who}</span>
-              <span className="dim text-[16px]">{when(b.at)}</span>
+              <span className="dim text-[length:calc(16px*var(--ft))]">{when(b.at)}</span>
             </div>
             {b.notes.map((n) => (
               <p key={n.id} className="ledger-note">

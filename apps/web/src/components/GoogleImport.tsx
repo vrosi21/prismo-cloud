@@ -111,15 +111,15 @@ export function GoogleImport({ onClose }: { onClose: () => void }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-baseline gap-2">
                         <b className="font-normal">{s.name}</b>
-                        <span className="dim text-[16px]">
+                        <span className="dim text-[length:calc(16px*var(--ft))]">
                           {s.type === 'tasks' ? 'task list' : 'calendar'} · {s.found.length}
                           {newest ? ` · newest ${short(newest)}` : ''}
                         </span>
                       </div>
-                      {t.why && <p className="dim text-[16px]">&gt; {t.why}</p>}
+                      {t.why && <p className="dim text-[length:calc(16px*var(--ft))]">&gt; {t.why}</p>}
                       {t.on && (
                         <div className="flex flex-wrap items-center gap-2 pt-1">
-                          <span className="dim text-[16px]">to</span>
+                          <span className="dim text-[length:calc(16px*var(--ft))]">to</span>
                           <select className="field !w-auto" value={t.tag} aria-label={`calendar for ${s.name}`} onChange={(e) => setTarget(s.id, { tag: e.target.value })}>
                             {tags.map((tag) => (
                               <option key={tag} value={tag}>
@@ -152,7 +152,7 @@ export function GoogleImport({ onClose }: { onClose: () => void }) {
                 {result.check.length > 0 && (
                   <details>
                     <summary className="link-btn">check these {result.check.length}: only their first day comes in</summary>
-                    <ul className="dim text-[16px]">
+                    <ul className="dim text-[length:calc(16px*var(--ft))]">
                       {result.check.map((c) => (
                         <li key={`${c.from}-${c.title}`}>
                           {c.title} ({c.from}): {c.why}

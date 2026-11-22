@@ -104,7 +104,7 @@ export function SharedFolderPage() {
   // this person's to see.
   const owner = shared.data?.folders.find((f) => f.id === first.crumbs[0]?.id)?.owner
   const path = (
-    <nav aria-label="path" className="pixel flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[10px] uppercase">
+    <nav aria-label="path" className="pixel flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[length:calc(10px*var(--fp))] uppercase">
       {first.crumbs.map((c, i) => (
         <Fragment key={c.id}>
           {i > 0 && <span className="dim">/</span>}

@@ -141,7 +141,7 @@ export function LookoutWall() {
                     {it.kind}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{titleOf(it)}</span>
-                  <span className="dim shrink-0 text-[16px]">{when(it.updated_at)}</span>
+                  <span className="dim shrink-0 text-[length:calc(16px*var(--ft))]">{when(it.updated_at)}</span>
                 </button>
               </li>
             ))}

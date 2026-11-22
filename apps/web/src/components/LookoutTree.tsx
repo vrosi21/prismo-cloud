@@ -96,7 +96,7 @@ export function LookoutTree({ items, open, target, onTarget, when }: Props) {
           {it.kind}
         </span>
         <span className="min-w-0 flex-1 truncate">{titleOf(it)}</span>
-        <span className="dim shrink-0 text-[16px]">{when(it.updated_at)}</span>
+        <span className="dim shrink-0 text-[length:calc(16px*var(--ft))]">{when(it.updated_at)}</span>
       </button>
     </li>
   )
@@ -119,7 +119,7 @@ export function LookoutTree({ items, open, target, onTarget, when }: Props) {
             <button type="button" className="tree-name" onClick={() => onTarget(target === n.id ? null : n.id)} title="new ones and imports go here">
               {n.name}
             </button>
-            {c && c.items > 0 && <span className="dim text-[16px]">{c.items}</span>}
+            {c && c.items > 0 && <span className="dim text-[length:calc(16px*var(--ft))]">{c.items}</span>}
             <button
               type="button"
               className="tree-add"

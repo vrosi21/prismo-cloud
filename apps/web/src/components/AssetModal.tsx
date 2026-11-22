@@ -194,13 +194,13 @@ function Details({ asset, folders, onClose }: { asset: Asset; folders: FolderNod
           x
         </button>
       </div>
-      <p className="dim text-[18px] leading-tight">
+      <p className="dim text-[length:calc(18px*var(--ft))] leading-tight">
         {facts.join(' · ')}
         <br />
         added {when(asset.created_at)}
         {owner && ` · via ${asset.source}`}
       </p>
-      {!owner && <p className="dim text-[17px]">&gt; shared with you: {canEdit ? 'you may rename, tag and move it to trash' : 'view only'}.</p>}
+      {!owner && <p className="dim text-[length:calc(17px*var(--ft))]">&gt; shared with you: {canEdit ? 'you may rename, tag and move it to trash' : 'view only'}.</p>}
 
       {canEdit && (
         <>
@@ -253,7 +253,7 @@ function Details({ asset, folders, onClose }: { asset: Asset; folders: FolderNod
               </select>
             </label>
           </div>
-          <p className="dim -mt-2 text-[17px]">&gt; {VISIBILITY_HINT[asset.visibility]}</p>
+          <p className="dim -mt-2 text-[length:calc(17px*var(--ft))]">&gt; {VISIBILITY_HINT[asset.visibility]}</p>
 
           {/* The cloud works this out from the file; where it guessed wrong, say so here. */}
           {(isPicture || asset.kind === 'gif') && (

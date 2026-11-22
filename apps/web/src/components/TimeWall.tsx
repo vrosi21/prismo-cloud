@@ -213,7 +213,7 @@ export function TimeWall() {
           items={items}
         />
         <Categories inRange={all} />
-        <button type="button" className="link-btn self-start text-[17px]" onClick={() => setImporting(true)}>
+        <button type="button" className="link-btn self-start text-[length:calc(17px*var(--ft))]" onClick={() => setImporting(true)}>
           import from google...
         </button>
         {!narrow && <TaskList items={items} anchor={anchor} />}
@@ -316,7 +316,7 @@ function MiniMonth({ anchor, onPick, items }: { anchor: string; onPick: (day: st
         <button type="button" className="chip" onClick={() => go(-1)} aria-label="previous month">
           &lt;
         </button>
-        <span className="pixel text-[9px] uppercase">
+        <span className="pixel text-[length:calc(9px*var(--fp))] uppercase">
           {MONTHS[shown.month].slice(0, 3)} {shown.year}
         </span>
         <button type="button" className="chip" onClick={() => go(1)} aria-label="next month">
@@ -392,7 +392,7 @@ function AddTask({ anchor }: { anchor: string }) {
   return (
     <form className="flex flex-col gap-2" onSubmit={add}>
       <input className="field" placeholder="add a task" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} aria-label="new task" />
-      <label className="flex items-center gap-2 text-[18px]">
+      <label className="flex items-center gap-2 text-[length:calc(18px*var(--ft))]">
         <input type="checkbox" className="check check-sm" checked={onDay} onChange={(e) => setOnDay(e.target.checked)} />
         on {anchor === t ? 'today' : short(anchor)}
       </label>
@@ -510,7 +510,7 @@ function TaskList({ items, anchor }: { items: Item[]; anchor: string }) {
           </div>
         )}
       </div>
-      <p className="dim hidden text-[16px] leading-tight xl:block">
+      <p className="dim hidden text-[length:calc(16px*var(--ft))] leading-tight xl:block">
         <KeyCap cap="d" />
         <KeyCap cap="x" />
         <KeyCap cap="w" />
@@ -629,7 +629,7 @@ function Categories({ inRange }: { inRange: Item[] }) {
               <label className="cat-group-head">
                 <input type="checkbox" className="check check-sm" checked={on} onChange={() => toggle('groups', g.id)} />
                 <span className="label !m-0">{g.label}</span>
-                {!on && <span className="dim text-[16px]">({list.length} hidden)</span>}
+                {!on && <span className="dim text-[length:calc(16px*var(--ft))]">({list.length} hidden)</span>}
               </label>
               {on && <ul>{list.map(row)}</ul>}
             </li>
@@ -711,7 +711,7 @@ function CalendarEdit({ tag, cats, onClose }: { tag: string; cats: ReturnType<ty
           </>
         )}
         <span className="label !m-0">colours by tag</span>
-        <p className="dim text-[16px]">
+        <p className="dim text-[length:calc(16px*var(--ft))]">
           &gt; {shared ? 'a tag here colours items in any calendar, unless the calendar sets its own.' : "beats the calendar's colour; an item's own colour beats this."}
         </p>
         {facets.length === 0 && <p className="dim">&gt; no key:value tags yet (type:exam, course:rf...).</p>}

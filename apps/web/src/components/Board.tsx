@@ -532,7 +532,7 @@ export default function Board({ canvas, onChange, board }: Props) {
         <button type="button" className="btn btn-sm" onClick={() => zoomAt(view.zoom / 1.2)} aria-label="zoom out">
           -
         </button>
-        <span className="pixel w-[46px] text-center text-[9px]">{Math.round(view.zoom * 100)}%</span>
+        <span className="pixel w-[46px] text-center text-[length:calc(9px*var(--fp))]">{Math.round(view.zoom * 100)}%</span>
         <button type="button" className="btn btn-sm" onClick={() => zoomAt(view.zoom * 1.2)} aria-label="zoom in">
           +
         </button>

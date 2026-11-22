@@ -8,8 +8,14 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/pixelify-sans':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/press-start-2p':
         specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/silkscreen':
+        specifier: 5.3.0
         version: 5.3.0
       '@fontsource/vt323':
         specifier: ^5.3.0
@@ -99,8 +105,14 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
+  '@fontsource/pixelify-sans@5.3.0':
+    resolution: {integrity: sha512-4RCe9nXbi7wUu5+H0FNX1sgPZ2kJ1MmY1uTkEfvQIzzqhoS8zGKJaJfdK8oreE0OU+5gM+NdurFi3H3FJRBvyw==}
+
   '@fontsource/press-start-2p@5.3.0':
     resolution: {integrity: sha512-gxWFxdeDglPhEYSwEeooomcaFK8kSQYLQwVxfnOJeYRj2sPEHXjpVtFgEaYfqzOjuAJGrIcJOipu2KY5YkbyuQ==}
+
+  '@fontsource/silkscreen@5.3.0':
+    resolution: {integrity: sha512-M1NQ3LQH0LFNvyFPd/piHEGMImPPtpLglNnLC6Vdcq9kL0jNIOtTQmksAWCc4enbDnw1OnIpZtjNEfRqYm/QmA==}
 
   '@fontsource/vt323@5.3.0':
     resolution: {integrity: sha512-3w33Rg/0+R1587HQfz4t7Q7e0GGeCqr3wmzIwqdGInUnrGEwMA5eX39GP4Z9wpTQnwfhVOhYuxuRwRUeIcicbw==}
@@ -1071,7 +1083,11 @@ snapshots:
   '@floating-ui/utils@0.2.12':
     optional: true
 
+  '@fontsource/pixelify-sans@5.3.0': {}
+
   '@fontsource/press-start-2p@5.3.0': {}
+
+  '@fontsource/silkscreen@5.3.0': {}
 
   '@fontsource/vt323@5.3.0': {}
 

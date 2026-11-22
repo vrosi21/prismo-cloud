@@ -377,7 +377,7 @@ export function StickerMaker({ asset, onClose }: Props) {
                 x
               </button>
             </div>
-            <p className="dim text-[18px] leading-tight">
+            <p className="dim text-[length:calc(18px*var(--ft))] leading-tight">
               &gt; from {displayName(asset)}. the original stays as it is.
               <br />
               &gt; now {size.w}x{size.h}
@@ -390,7 +390,7 @@ export function StickerMaker({ asset, onClose }: Props) {
                 </button>
               ))}
             </div>
-            <p className="dim text-[18px] leading-tight">&gt; {hint}</p>
+            <p className="dim text-[length:calc(18px*var(--ft))] leading-tight">&gt; {hint}</p>
 
             {tool === 'crop' && (
               <div>
@@ -432,7 +432,7 @@ export function StickerMaker({ asset, onClose }: Props) {
                   smart cut-out
                 </button>
               </div>
-              <p className="dim text-[17px] leading-tight">
+              <p className="dim text-[length:calc(17px*var(--ft))] leading-tight">
                 &gt; finds the subject by itself. best on photos: people, pets, things. it runs here in the browser: the picture goes nowhere.
               </p>
             </div>

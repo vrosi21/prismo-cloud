@@ -8,6 +8,16 @@ export const THEMES = [
 
 export type ThemeId = (typeof THEMES)[number]['id']
 
+// How things are drawn, apart from where you are (the theme): big pixels,
+// finer pixels, or no pixels at all. theme.css, "Looks".
+export const LOOKS = [
+  { id: '8bit', name: '8-bit', hint: 'big pixels, as it was' },
+  { id: '16bit', name: '16-bit', hint: 'finer pixels, easier to read' },
+  { id: 'smooth', name: 'smooth', hint: 'no pixels: plain type, round corners' },
+] as const
+
+export type LookId = (typeof LOOKS)[number]['id']
+
 // localStorage can throw (private windows, blocked storage); the app must
 // still work, just without remembering.
 function read(key: string): string | null {
@@ -28,6 +38,8 @@ function write(key: string, value: string) {
 const saved = read('prismo.theme')
 const themeStore = createStore<ThemeId>(THEMES.some((t) => t.id === saved) ? (saved as ThemeId) : 'timeroom')
 const scanlineStore = createStore<boolean>(read('prismo.scanlines') === 'on')
+const savedLook = read('prismo.look')
+const lookStore = createStore<LookId>(LOOKS.some((l) => l.id === savedLook) ? (savedLook as LookId) : '8bit')
 
 // The phone's status bar and the installed app's title bar take this
 // colour: the wall of the theme in use.
@@ -51,6 +63,13 @@ export function setScanlines(on: boolean) {
   scanlineStore.set(on)
 }
 
+export function setLook(id: LookId) {
+  document.documentElement.dataset.look = id
+  write('prismo.look', id)
+  lookStore.set(id)
+}
+
 export const useTheme = () => useStore(themeStore)
+export const useLook = () => useStore(lookStore)
 export const useScanlines = () => useStore(scanlineStore)
 export const currentTheme = () => themeStore.get()

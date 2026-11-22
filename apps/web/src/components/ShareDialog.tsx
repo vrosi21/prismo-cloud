@@ -82,7 +82,7 @@ export function ShareDialog({ target, name, onClose }: Props) {
           </button>
         </div>
 
-        <p className="dim text-[18px] leading-tight">
+        <p className="dim text-[length:calc(18px*var(--ft))] leading-tight">
           &gt; view: look and download.
           <br />
           &gt; edit: also {isFolder ? 'add files, ' : ''}rename, tag and move to trash. never: delete for good, share further.

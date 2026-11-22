@@ -46,7 +46,7 @@ export function UploadTray() {
           </button>
         )}
       </div>
-      <ul className="max-h-[220px] overflow-y-auto px-3 pb-3 text-[18px]">
+      <ul className="max-h-[220px] overflow-y-auto px-3 pb-3 text-[length:calc(18px*var(--ft))]">
         {items.map((it) => (
           <li key={it.id} className="flex items-center justify-between gap-3 py-[2px]">
             <span className="truncate" title={it.error ?? it.name}>
@@ -114,7 +114,7 @@ export function Boot() {
   if (done) return null
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg p-6" role="status" aria-label="starting">
-      <pre className="m-0 font-term text-[22px] leading-snug text-ink">
+      <pre className="m-0 font-term text-[length:calc(22px*var(--ft))] leading-snug text-ink">
         {BOOT_LINES.slice(0, shown).join('\n')}
         <span className="cursor" />
       </pre>

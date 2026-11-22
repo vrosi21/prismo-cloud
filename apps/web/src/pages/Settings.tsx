@@ -4,7 +4,7 @@ import { api, type Me, type Token, type Visibility } from '../api'
 import { copyText, when } from '../lib/format'
 import { errorText, log } from '../lib/log'
 import { useTokens } from '../lib/queries'
-import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/theme'
+import { LOOKS, setLook, setScanlines, setTheme, THEMES, useLook, useScanlines, useTheme } from '../lib/theme'
 import { ARROWS, KeyCap } from '../components/KeyCap'
 import type { ArrowDir } from '../components/sprites'
 import { WALLS } from '../lib/room'
@@ -52,9 +52,18 @@ function FromGoogle() {
 
 function Look() {
   const theme = useTheme()
+  const look = useLook()
   const scanlines = useScanlines()
   return (
     <Section title="look">
+      <div className="flex flex-wrap gap-x-4 gap-y-5" role="group" aria-label="look">
+        {LOOKS.map((l) => (
+          <button key={l.id} type="button" className="btn" aria-pressed={look === l.id} onClick={() => setLook(l.id)}>
+            {l.name}
+          </button>
+        ))}
+      </div>
+      <p className="dim">&gt; {LOOKS.find((l) => l.id === look)?.hint}</p>
       <div className="flex flex-wrap gap-x-4 gap-y-5">
         {THEMES.map((t) => (
           <button key={t.id} type="button" className="btn" aria-pressed={theme === t.id} onClick={() => setTheme(t.id)}>
@@ -353,7 +362,7 @@ function FreshToken({ publicUrl, secret, name, mayLook, onDone }: FreshTokenProp
           </select>
         </label>
       </div>
-      <p className="dim -mt-2 text-[17px] leading-tight">
+      <p className="dim -mt-2 text-[length:calc(17px*var(--ft))] leading-tight">
         &gt; a link to a private file opens only for you, until you share that file.
         <br />
         &gt; the helper and the sharex config both upload: use one. with the helper, switch "upload image to host" off in sharex.

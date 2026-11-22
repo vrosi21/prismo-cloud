@@ -8,7 +8,7 @@ import { log, logLines } from '../lib/log'
 import { useFolderTree, useRefreshLibrary, useShared, useStats } from '../lib/queries'
 import { useStore } from '../lib/store'
 import { uploadTarget } from '../lib/target'
-import { setScanlines, setTheme, THEMES, useScanlines, useTheme } from '../lib/theme'
+import { LOOKS, setLook, setScanlines, setTheme, THEMES, useLook, useScanlines, useTheme } from '../lib/theme'
 import { uploadFiles, uploads } from '../lib/uploads'
 import { Boot, LogLines, Palette, UploadTray, type Command } from './Overlays'
 import { ItemDrawer } from './ItemPanel'
@@ -129,6 +129,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
       })),
       { id: 'settings', label: 'go to settings', run: () => navigate('/settings') },
       ...THEMES.map((t) => ({ id: `theme-${t.id}`, label: `theme ${t.name.toLowerCase()}`, hint: t.hint, run: () => setTheme(t.id) })),
+      ...LOOKS.map((l) => ({ id: `look-${l.id}`, label: `look ${l.name}`, hint: l.hint, run: () => setLook(l.id) })),
       { id: 'scanlines', label: 'toggle scanlines', run: () => setScanlines(document.documentElement.dataset.scanlines !== 'on') },
     ],
     [navigate, me.member, shared, tree],
@@ -396,7 +397,9 @@ function StatusBar({ email, member }: { email: string; member: boolean }) {
   const items = useStore(uploads)
   const lines = useStore(logLines)
   const theme = useTheme()
+  const look = useLook()
   const scanlines = useScanlines()
+  const nextLook = LOOKS[(LOOKS.findIndex((l) => l.id === look) + 1) % LOOKS.length]
 
   const sending = items.filter((i) => i.state === 'waiting' || i.state === 'checking' || i.state === 'sending').length
   const processing = stats?.processing ?? 0
@@ -414,7 +417,7 @@ function StatusBar({ email, member }: { email: string; member: boolean }) {
   const nextTheme = THEMES[(THEMES.findIndex((t) => t.id === theme) + 1) % THEMES.length]
 
   return (
-    <footer className="status-bar panel px relative z-20 mx-3 mb-3 flex h-[30px] shrink-0 items-center gap-4 overflow-hidden px-2 text-[18px]">
+    <footer className="status-bar panel px relative z-20 mx-3 mb-3 flex h-[30px] shrink-0 items-center gap-4 overflow-hidden px-2 text-[length:calc(18px*var(--ft))]">
       <BmoFace mood={mood} scale={1.5} />
       <span className="shrink-0">{text}</span>
       {stats && member && (
@@ -427,7 +430,10 @@ function StatusBar({ email, member }: { email: string; member: boolean }) {
         arrows move · enter open · space select · ctrl+arrows turn
       </span>
       <span className="dim hidden truncate lg:inline">{email}</span>
-      <button type="button" className="chip shrink-0" onClick={() => setScanlines(!scanlines)} aria-pressed={scanlines}>
+      <button type="button" className="chip shrink-0" onClick={() => setLook(nextLook.id)} title={`look: switch to ${nextLook.name} (${nextLook.hint})`}>
+        {LOOKS.find((l) => l.id === look)?.name}
+      </button>
+      <button type="button" className="chip hidden shrink-0 sm:inline-flex" onClick={() => setScanlines(!scanlines)} aria-pressed={scanlines}>
         scanlines
       </button>
       <button type="button" className="chip shrink-0" onClick={() => setTheme(nextTheme.id)} title={`switch to ${nextTheme.name}`}>

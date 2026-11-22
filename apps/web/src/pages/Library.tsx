@@ -279,7 +279,7 @@ export function Library({ trashed = false }: { trashed?: boolean }) {
       </>
     ) : (
       <>
-        <nav aria-label="path" className="pixel flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[10px] uppercase">
+        <nav aria-label="path" className="pixel flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[length:calc(10px*var(--fp))] uppercase">
           <Crumb to="/" folderId={null} name="all files" last={crumbs.length === 0} onMoved={refresh} />
           {crumbs.map((c, i) => (
             <Fragment key={c.id}>
