@@ -369,7 +369,9 @@ function useSlashMenu(editor: Editor | null, blocks: Block[], enabled: boolean) 
       if (editor.isDestroyed || !editor.isInitialized) return
       const at = editor.view.coordsAtPos($from.pos)
       const box = (editor.view.dom.closest('.notebook-page') as HTMLElement | null)?.getBoundingClientRect()
-      setState({ query: m[1], from: $from.start(), to: $from.pos, top: at.bottom - (box?.top ?? 0) + 4, left: at.left - (box?.left ?? 0) })
+      // Kept inside the page: on a phone the caret can sit near the right edge.
+      const left = Math.max(0, Math.min(at.left - (box?.left ?? 0), (box?.width ?? Infinity) - 248))
+      setState({ query: m[1], from: $from.start(), to: $from.pos, top: at.bottom - (box?.top ?? 0) + 4, left })
       setIndex(0)
     }
     editor.on('transaction', look)

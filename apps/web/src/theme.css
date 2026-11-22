@@ -1293,3 +1293,17 @@ input.board-group-label { width: 280px; height: auto; }
 [data-look="smooth"] .panel.px,
 [data-look="smooth"] .panel.px-raised { box-shadow: 0 0 0 1px color-mix(in srgb, var(--line) 35%, transparent), 0 6px 18px rgb(0 0 0 / 0.12); }
 [data-look="smooth"] .screen-door { background: none; }
+
+/* --- Boards and notebooks on a phone ---------------------------------------
+   One row of tools that scrolls sideways, and panels that fit the screen. */
+@media (max-width: 640px) {
+  .board-tools, .nb-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .board-tools > *, .nb-toolbar > * { flex: none; }
+  .board-sel, .board-picker, .board-legend { top: 56px; }
+  .board-picker { left: 8px; width: calc(100% - 16px); }
+  .board-legend { right: 8px; width: min(300px, calc(100% - 16px)); }
+  .notebook .tiptap table { display: block; overflow-x: auto; }
+}
+@media (hover: none) and (pointer: coarse) {
+  .hide-on-touch { display: none; }
+}

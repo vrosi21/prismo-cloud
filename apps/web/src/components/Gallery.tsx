@@ -186,6 +186,10 @@ interface CardProps {
   onSelect: (asset: Asset, mode: SelectMode) => void
 }
 
+// Dragging tiles onto folders needs a mouse; on a touch screen a long press
+// selects instead, and "move to folder" does the moving.
+const COARSE = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+
 function AssetCard({ index, asset, size, selected, selection, selecting, selectable, onOpen, onSelect }: CardProps) {
   const [hover, setHover] = useState(false)
   const ready = asset.status === 'ready'
@@ -198,6 +202,8 @@ function AssetCard({ index, asset, size, selected, selection, selecting, selecta
   // Like a file manager: Ctrl adds or removes one, Shift takes everything
   // from the last one clicked to this one. A plain click opens the file,
   // unless a selection is already under way; then it adds to it.
+  // A finger has no Ctrl: holding a tile starts (or adds to) a selection.
+  const byFinger = useRef(false)
   const click = (e: MouseEvent) => {
     if (!selectable) return onOpen(asset)
     if (e.shiftKey) return onSelect(asset, 'range')
@@ -216,12 +222,19 @@ function AssetCard({ index, asset, size, selected, selection, selecting, selecta
         data-selected={selected || undefined}
         className="card group"
         style={{ width: size }}
-        draggable={selectable}
+        draggable={selectable && !COARSE}
         onDragStart={(e) => startAssetDrag(e, selected ? [...selection] : [asset.id])}
         onDragEnd={endAssetDrag}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         onClick={click}
+        onPointerDown={(e) => (byFinger.current = e.pointerType === 'touch')}
+        onContextMenu={(e) => {
+          if (!selectable || !byFinger.current) return
+          e.preventDefault()
+          navigator.vibrate?.(10)
+          onSelect(asset, 'toggle')
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') onOpen(asset)
           if (e.key === ' ' && selectable) {

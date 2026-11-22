@@ -16,7 +16,10 @@ export function Settings({ me }: { me: Me }) {
       <div className="mx-auto flex max-w-[900px] flex-col gap-6 pb-8">
         <Look />
         {me.member && <FromGoogle />}
-        <Keys />
+        {/* Keys mean nothing on a phone. */}
+        <div className="hide-on-touch">
+          <Keys />
+        </div>
         {/* Tokens belong to a library; a guest has none. */}
         {me.member && <CaptureClients publicUrl={me.public_url} />}
         <Account email={me.user.email} />

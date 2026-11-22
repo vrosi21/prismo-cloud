@@ -244,6 +244,57 @@ export default function Board({ canvas, onChange, board }: Props) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  // Two fingers: pinch to zoom, move both to pan. Each finger is kept by its
+  // pointer id; the moment a second one lands, whatever the first one began
+  // (a pan, a move) is dropped, so the board never jumps.
+  const fingers = useRef(new Map<number, { x: number; y: number }>())
+  const pinch = useRef<{ d: number; mx: number; my: number; view: View } | null>(null)
+  const viewNow = useRef(view)
+  viewNow.current = view
+  useEffect(() => {
+    const el = host.current
+    if (!el) return
+    const spread = () => {
+      const [a, b] = [...fingers.current.values()]
+      return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }
+    }
+    const down = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return
+      fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (fingers.current.size === 2) {
+        setGesture(null)
+        pinch.current = { ...spread(), view: viewNow.current }
+      }
+    }
+    const move = (e: PointerEvent) => {
+      if (!fingers.current.has(e.pointerId)) return
+      fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      const p = pinch.current
+      if (!p || fingers.current.size !== 2) return
+      const now = spread()
+      const r = el.getBoundingClientRect()
+      const zoom = Math.min(3, Math.max(0.15, p.view.zoom * (now.d / p.d)))
+      // The board point under the fingers' middle stays under it.
+      const bx = (p.mx - r.left - p.view.x) / p.view.zoom
+      const by = (p.my - r.top - p.view.y) / p.view.zoom
+      setView({ zoom, x: now.mx - r.left - bx * zoom, y: now.my - r.top - by * zoom })
+    }
+    const lift = (e: PointerEvent) => {
+      fingers.current.delete(e.pointerId)
+      if (fingers.current.size < 2) pinch.current = null
+    }
+    el.addEventListener('pointerdown', down, true)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', lift)
+    window.addEventListener('pointercancel', lift)
+    return () => {
+      el.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', lift)
+      window.removeEventListener('pointercancel', lift)
+    }
+  }, [])
+
   // --- making things ---
   const center = (): Point => {
     const el = host.current!
@@ -341,7 +392,7 @@ export default function Board({ canvas, onChange, board }: Props) {
     if (!gesture) return
     const move = (e: PointerEvent) => {
       const g = live.current
-      if (!g) return
+      if (!g || pinch.current) return
       if (g.kind === 'pan') {
         setView({ ...g.view, x: g.view.x + e.clientX - g.sx, y: g.view.y + e.clientY - g.sy })
       } else if (g.kind === 'move') {
@@ -395,11 +446,15 @@ export default function Board({ canvas, onChange, board }: Props) {
         future.current = []
       }
     }
+    // The browser took the pointer: the gesture ends where it was.
+    const cancel = () => setGesture(null)
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up, { once: true })
+    window.addEventListener('pointercancel', cancel, { once: true })
     return () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', cancel)
     }
   }, [gesture !== null]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -442,8 +497,9 @@ export default function Board({ canvas, onChange, board }: Props) {
     }
     setSel(next)
     // Not editing, a press on a card that was not selected only selects it;
-    // dragging it moves the view, as on the empty board.
-    if (!edit && (!sel.has(n.id) || e.shiftKey)) {
+    // dragging it moves the view, as on the empty board. A finger never moves
+    // a card outside edit mode: on a phone the board is for looking.
+    if (!edit && (!sel.has(n.id) || e.shiftKey || e.pointerType === 'touch')) {
       setGesture({ kind: 'pan', sx: e.clientX, sy: e.clientY, view })
       return
     }
