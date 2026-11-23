@@ -7,6 +7,7 @@ import { folderEntries, openMenu } from '../lib/menu'
 import { useItemEntries } from './Menus'
 import { errorText, log } from '../lib/log'
 import { useFolderTree, useRefreshLibrary } from '../lib/queries'
+import { KindIcon } from './sprites'
 
 // The lookout's list: notebooks and boards in their folders, the same
 // folders the library has, so one folder holds a board and its pictures
@@ -81,27 +82,26 @@ export function LookoutTree({ items, open, target, onTarget, when }: Props) {
     return !c || c.items > 0 || c.files === 0
   }
 
-  const itemRow = (it: Item, depth: number) => (
+  const itemRow = (it: Item) => (
     <li key={it.id}>
       <button
         type="button"
         className="lookout-row"
-        style={{ paddingLeft: 4 + depth * 14 }}
         aria-current={open === it.id || undefined}
         onClick={() => lookout.set(it.id)}
         onContextMenu={(e) => openMenu(e, itemEntries(it))}
         data-nav-item
       >
-        <span className="kind-tag" data-kind={it.kind}>
-          {it.kind}
+        <KindIcon kind={it.kind} />
+        <span className="min-w-0 flex-1 truncate" title={it.kind}>
+          {titleOf(it)}
         </span>
-        <span className="min-w-0 flex-1 truncate">{titleOf(it)}</span>
         <span className="dim shrink-0 text-[length:calc(16px*var(--ft))]">{when(it.updated_at)}</span>
       </button>
     </li>
   )
 
-  const folderRows = (nodes: FolderNode[], depth: number): ReactNode[] =>
+  const folderRows = (nodes: FolderNode[]): ReactNode[] =>
     nodes.filter(shows).map((n) => {
       const isShut = shut.has(n.id)
       const c = inside.get(n.id)
@@ -109,7 +109,6 @@ export function LookoutTree({ items, open, target, onTarget, when }: Props) {
         <li key={n.id}>
           <div
             className="tree-folder"
-            style={{ paddingLeft: depth * 14 }}
             aria-current={target === n.id || undefined}
             onContextMenu={(e) => openMenu(e, folderEntries(n.id, [{ label: target === n.id ? 'new ones go to the top again' : 'new ones and imports go here', run: () => onTarget(target === n.id ? null : n.id) }, 'sep']))}
           >
@@ -143,10 +142,10 @@ export function LookoutTree({ items, open, target, onTarget, when }: Props) {
             </button>
           </div>
           {!isShut && (
-            <ul>
-              {making === n.id && <NewFolder parent={n} depth={depth + 1} onDone={(id) => (setMaking(undefined), id && onTarget(id))} />}
-              {folderRows(n.children, depth + 1)}
-              {(byFolder.get(n.id) ?? []).map((it) => itemRow(it, depth + 1))}
+            <ul className="tree-in">
+              {making === n.id && <NewFolder parent={n} onDone={(id) => (setMaking(undefined), id && onTarget(id))} />}
+              {folderRows(n.children)}
+              {(byFolder.get(n.id) ?? []).map(itemRow)}
             </ul>
           )}
         </li>
@@ -162,15 +161,15 @@ export function LookoutTree({ items, open, target, onTarget, when }: Props) {
         </button>
       </div>
       <ul className="lookout-list">
-        {making === null && <NewFolder parent={null} depth={0} onDone={(id) => (setMaking(undefined), id && onTarget(id))} />}
-        {folderRows(tree.roots, 0)}
-        {(byFolder.get(null) ?? []).map((it) => itemRow(it, 0))}
+        {making === null && <NewFolder parent={null} onDone={(id) => (setMaking(undefined), id && onTarget(id))} />}
+        {folderRows(tree.roots)}
+        {(byFolder.get(null) ?? []).map((it) => itemRow(it))}
       </ul>
     </>
   )
 }
 
-function NewFolder({ parent, depth, onDone }: { parent: FolderNode | null; depth: number; onDone: (id: string | null) => void }) {
+function NewFolder({ parent, onDone }: { parent: FolderNode | null; onDone: (id: string | null) => void }) {
   const [name, setName] = useState('')
   const qc = useQueryClient()
   const refresh = useRefreshLibrary()
@@ -190,7 +189,7 @@ function NewFolder({ parent, depth, onDone }: { parent: FolderNode | null; depth
   }
   return (
     <li>
-      <form className="flex items-center gap-2 py-1" style={{ paddingLeft: depth * 14 }} onSubmit={submit}>
+      <form className="flex items-center gap-2 py-1" onSubmit={submit}>
         <input
           className="field min-w-0 flex-1"
           autoFocus

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { useNarrow } from '../lib/narrow'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Item } from '../api'
 import { importBundle, readBundle } from '../lib/bundle'
@@ -20,7 +21,7 @@ import { Ledger } from './Ledger'
 
 /** What the lookout shows for the ledger instead of an item. */
 export const LEDGER = 'ledger'
-import { Cube } from './sprites'
+import { Cube, KindIcon } from './sprites'
 
 const Board = lazy(() => import('./Board'))
 
@@ -39,6 +40,10 @@ function savedFolder(): string {
 
 export function LookoutWall() {
   const open = useStore(lookout)
+  const narrow = useNarrow()
+  // On a phone the list is a drawer; opening anything from it closes it.
+  const [browse, setBrowse] = useState(false)
+  useEffect(() => setBrowse(false), [open])
   const [q, setQ] = useState('')
   const [folder, setFolder] = useState(savedFolder)
   const tree = useFolderTree()
@@ -78,8 +83,16 @@ export function LookoutWall() {
 
   return (
     <section className="lookout" aria-label="lookout wall: notebooks and boards">
-      <aside className="lookout-side panel px">
-        <h2 className="uppercase">notebooks &amp; boards</h2>
+      {narrow && browse && <div className="sheet-scrim" onClick={() => setBrowse(false)} aria-hidden />}
+      <aside className={`lookout-side panel px ${narrow ? `drawer ${browse ? 'open' : ''}` : ''}`}>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="uppercase">notebooks &amp; boards</h2>
+          {narrow && (
+            <button type="button" className="btn btn-sm" onClick={() => setBrowse(false)} aria-label="close">
+              x
+            </button>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn btn-sm btn-accent" disabled={create.isPending} onClick={() => make('notebook')}>
             + notebook
@@ -137,9 +150,7 @@ export function LookoutWall() {
                   onContextMenu={(e) => openMenu(e, itemEntries(it))}
                   data-nav-item
                 >
-                  <span className="kind-tag" data-kind={it.kind}>
-                    {it.kind}
-                  </span>
+                  <KindIcon kind={it.kind} />
                   <span className="min-w-0 flex-1 truncate">{titleOf(it)}</span>
                   <span className="dim shrink-0 text-[length:calc(16px*var(--ft))]">{when(it.updated_at)}</span>
                 </button>
@@ -152,6 +163,17 @@ export function LookoutWall() {
       </aside>
 
       <div className="lookout-main">
+        {narrow && (
+          <div className="lookout-bar panel px">
+            <button type="button" className="btn btn-sm" aria-expanded={browse} onClick={() => setBrowse(true)}>
+              browse
+            </button>
+            <span className="min-w-0 flex-1 truncate">{open === LEDGER ? 'ledger' : open ? '' : 'pinned board'}</span>
+            <button type="button" className="btn btn-sm btn-accent" disabled={create.isPending} onClick={() => make('notebook')}>
+              + notebook
+            </button>
+          </div>
+        )}
         {open === LEDGER ? (
           <Ledger />
         ) : open ? (

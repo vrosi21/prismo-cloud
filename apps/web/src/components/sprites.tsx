@@ -208,3 +208,32 @@ export function FileIcon({ scale = 3 }: { scale?: number }) {
   )
 }
 
+
+// A notebook, on a 10x12 grid: a green cover with a dark spine and lines on it.
+export function NotebookIcon({ scale = 2 }: { scale?: number }) {
+  return (
+    <svg viewBox="0 0 10 12" width={10 * scale} height={12 * scale} shapeRendering="crispEdges" className="sprite shrink-0" aria-hidden>
+      <path fill="var(--line)" d="M1 0h8v1h1v10h-1v1H1v-1H0V1h1z" />
+      <path fill="color-mix(in srgb, var(--c4) 70%, var(--panel))" d="M1 1h8v10H1z" />
+      <path fill="color-mix(in srgb, var(--c4) 60%, var(--line))" d="M2 1h1v10H2z" />
+      <path fill="var(--panel)" d="M4 3h4v1H4zm0 2h4v1H4zm0 2h3v1H4z" />
+    </svg>
+  )
+}
+
+// A board, on a 12x10 grid: a canvas with two purple cards and the arrow between them.
+export function BoardIcon({ scale = 2 }: { scale?: number }) {
+  return (
+    <svg viewBox="0 0 12 10" width={12 * scale} height={10 * scale} shapeRendering="crispEdges" className="sprite shrink-0" aria-hidden>
+      <path fill="var(--line)" d="M0 0h12v10H0z" />
+      <path fill="var(--panel)" d="M1 1h10v8H1z" />
+      <path fill="var(--c6)" d="M2 2h4v2H2zm4 4h4v2H6z" />
+      <path fill="var(--ink-dim)" d="M7 3h1v3H7z" />
+    </svg>
+  )
+}
+
+/** The icon of an item kind: notebook or board (others have none). */
+export function KindIcon({ kind, scale = 2 }: { kind: string; scale?: number }) {
+  return kind === 'board' ? <BoardIcon scale={scale} /> : kind === 'notebook' ? <NotebookIcon scale={scale} /> : null
+}

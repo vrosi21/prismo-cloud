@@ -43,7 +43,7 @@ type OnMenu = (e: ReactMouseEvent, o: Occurrence) => void
 const colorStyle = (c: number | null): CSSProperties => (c ? ({ '--chip': `var(--c${c})` } as CSSProperties) : {})
 
 /** One appearance, as a chip: colour, a box to tick for a task, the title. */
-function Chip({ o, showTime = true, onPointerDown, onMenu }: { o: Occurrence; showTime?: boolean; onPointerDown?: (e: ReactPointerEvent) => void; onMenu?: OnMenu }) {
+function Chip({ o, showTime = true, bare = false, onPointerDown, onMenu }: { o: Occurrence; showTime?: boolean; bare?: boolean; onPointerDown?: (e: ReactPointerEvent) => void; onMenu?: OnMenu }) {
   const { update } = useItemChanges()
   const colorOf = useColorOf()
   const it = o.item
@@ -60,7 +60,7 @@ function Chip({ o, showTime = true, onPointerDown, onMenu }: { o: Occurrence; sh
       title={`${titleOf(it)}${it.time ? ` · ${it.time}` : ''}${continues ? ` · until ${short(o.end)}` : ''}`}
       onPointerDown={onPointerDown}
     >
-      {it.status && (
+      {it.status && !bare && (
         <input
           type="checkbox"
           className="check check-sm"
@@ -467,7 +467,10 @@ export function MonthGrid({
   const drop = useDropChange()
   const occMenu = useOccurrenceMenu()
   const { drag, start } = useDragItems(drop)
-  const max = compact ? 2 : 4
+  // On a phone a cell is 50px wide: bare chips (title only), and a tap on
+  // the day opens it, as in Google Calendar's app.
+  const narrow = useNarrow()
+  const max = compact ? 2 : narrow ? 3 : 4
   const t = today()
   return (
     <div className={`mg ${compact ? 'mg-compact' : ''}`}>
@@ -491,17 +494,18 @@ export function MonthGrid({
               data-other={other || undefined}
               data-today={day === t || undefined}
               data-drop={(drag?.moved && drag.date === day) || undefined}
-              onClick={(e) => e.target === e.currentTarget && onDraft({ date: day, time: null, minutes: null, x: e.clientX, y: e.clientY })}
+              onClick={(e) => e.target === e.currentTarget && (narrow ? onDay(day) : onDraft({ date: day, time: null, minutes: null, x: e.clientX, y: e.clientY }))}
             >
               <button type="button" className="mg-num" onClick={() => onDay(day)} title={`open ${short(day)}`}>
                 {parse(day).getDate()}
               </button>
               {here.slice(0, max).map((o) => (
-                <Chip key={o.key} o={o} showTime={!compact} onPointerDown={start(o, 'move')} onMenu={occMenu} />
+                <Chip key={o.key} o={o} showTime={!compact && !narrow} bare={narrow} onPointerDown={start(o, 'move')} onMenu={occMenu} />
               ))}
               {here.length > max && (
                 <button type="button" className="mg-more" onClick={() => onDay(day)}>
-                  +{here.length - max} more
+                  +{here.length - max}
+                  {narrow ? '' : ' more'}
                 </button>
               )}
             </div>

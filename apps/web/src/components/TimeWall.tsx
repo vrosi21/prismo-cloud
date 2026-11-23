@@ -235,7 +235,7 @@ export function TimeWall() {
             </button>
           </div>
           <h2 className="time-title">{title}</h2>
-          <span className="flex-1" />
+          <span className={narrow ? 'basis-full' : 'flex-1'} />
           {narrow && (
             <>
               <select className="field !w-auto" aria-label="view" value={view} onChange={(e) => setView(e.target.value as View)}>
@@ -247,6 +247,10 @@ export function TimeWall() {
               </select>
               <button type="button" className="btn btn-sm" aria-expanded={filters} onClick={() => setFilters(true)}>
                 filters
+              </button>
+              <span className="flex-1" />
+              <button type="button" className="btn btn-sm btn-accent" onClick={() => newHere(0, 0)}>
+                + new
               </button>
             </>
           )}
@@ -291,11 +295,6 @@ export function TimeWall() {
             <TimeGrid key={`${view}-${days[0]}`} days={days} occ={occ} onDraft={setDraft} />
           )}
         </div>
-        {narrow && (
-          <button type="button" className="fab btn btn-accent" aria-label="new event or task" onClick={() => newHere(0, 0)}>
-            +
-          </button>
-        )}
       </div>
       {draft && <QuickCreate draft={draft} onClose={() => setDraft(null)} />}
     </section>

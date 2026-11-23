@@ -1307,3 +1307,55 @@ input.board-group-label { width: 280px; height: auto; }
 @media (hover: none) and (pointer: coarse) {
   .hide-on-touch { display: none; }
 }
+
+/* --- Polish, phone first (2026-11-23) --------------------------------------- */
+/* The lookout's tree: each level inside a folder hangs off a dotted line in
+   the folder's colour, instead of a deeper indent per level. */
+.tree-in { margin-left: 9px; padding-left: 6px; border-left: 2px dotted var(--accent-deep); }
+.lookout-row .sprite { margin: 0 2px; }
+
+/* A tapped dropdown keeps no hover colour or focus ring on a touch screen. */
+@media (hover: none) {
+  select.field:hover { --row: linear-gradient(var(--ink), var(--ink)); }
+}
+@media (pointer: coarse) {
+  select.field:focus-visible { outline: none; }
+  /* The footer's chips stay footer-sized. */
+  .status-bar .chip { min-height: 0; padding: 0 10px; }
+}
+
+/* Between a phone and a desktop the lookout's list scrolls inside itself
+   instead of running over what is under it. */
+@media (max-width: 900px) {
+  .lookout-side { overflow-y: auto; }
+}
+
+@media (max-width: 640px) {
+  .app-header { margin: 8px 8px 0; padding: 6px 8px; gap: 8px; }
+  .status-bar { margin: 0 8px 6px; gap: 10px; }
+  .wall { padding: 8px; }
+
+  /* The lookout: the page gets the screen, the list is a drawer behind "browse". */
+  .lookout { flex-direction: column; overflow: visible; gap: 8px; }
+  .lookout-side.drawer { display: none; }
+  .lookout-side.drawer.open {
+    position: fixed; z-index: 65; top: 0; bottom: 0; left: 0;
+    display: flex; width: min(340px, 88vw); max-height: none; overflow-y: auto;
+    padding-top: calc(12px + env(safe-area-inset-top)); padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  .lookout-main { min-height: 0; flex: 1; gap: 8px; }
+  .lookout-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px; }
+  .lookout-page { padding: 10px 12px; }
+  .pins { gap: 12px; padding: 10px; }
+
+  /* The month: a cell is about 50px wide, so chips are a colour and a title. */
+  .mg-cells { gap: 1px; }
+  .mg-cell { gap: 1px; padding: 2px 1px; }
+  .mg-cell .cal-chip { gap: 0; padding: 0 2px; box-shadow: inset 2px 0 0 0 var(--chip); font-size: calc(14px * var(--ft)); line-height: 1.15; cursor: pointer; }
+  .mg-cell .cal-chip[data-kind="task"] { box-shadow: inset 0 0 0 1px var(--chip); }
+  .mg-cell .cal-chip .truncate { overflow: hidden; white-space: nowrap; text-overflow: clip; }
+  .mg-num { padding: 0 2px; font-size: calc(7px * var(--fp)); }
+  .mg-more { font-size: calc(14px * var(--ft)); line-height: 1; }
+  .mg-head { font-size: calc(6px * var(--fp)); }
+  .time-bar { gap: 6px 8px; }
+}

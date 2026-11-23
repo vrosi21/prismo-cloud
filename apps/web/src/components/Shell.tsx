@@ -138,7 +138,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
   return (
     <div className="relative z-10 flex h-full flex-col">
       <Boot />
-      <header className="panel px relative z-20 mx-3 mt-3 flex items-center gap-3 px-3 py-2">
+      <header className="app-header panel px relative z-20 mx-3 mt-3 flex items-center gap-3 px-3 py-2">
         <button
           type="button"
           className="btn btn-sm md:hidden"
